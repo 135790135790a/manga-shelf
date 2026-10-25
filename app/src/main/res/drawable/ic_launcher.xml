@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+
+    <!-- 底板 -->
+    <path
+        android:fillColor="#17171E"
+        android:pathData="M8,2h32a6,6 0 0 1 6,6v32a6,6 0 0 1 -6,6h-32a6,6 0 0 1 -6,-6v-32a6,6 0 0 1 6,-6z" />
+
+    <!-- 左页 -->
+    <path
+        android:fillColor="#F5F5F7"
+        android:pathData="M11,10h10a2,2 0 0 1 2,2v24a2,2 0 0 1 -2,2h-10a2,2 0 0 1 -2,-2v-24a2,2 0 0 1 2,-2z" />
+
+    <!-- 右页 -->
+    <path
+        android:fillColor="#F5F5F7"
+        android:pathData="M27,10h10a2,2 0 0 1 2,2v24a2,2 0 0 1 -2,2h-10a2,2 0 0 1 -2,-2v-24a2,2 0 0 1 2,-2z" />
+
+    <!-- 书脊高光 -->
+    <path
+        android:fillColor="#FF9F45"
+        android:pathData="M23,10h2v28h-2z" />
+
+    <!-- 页面上的分格线（示意漫画格子） -->
+    <path
+        android:fillColor="#9AA0B4"
+        android:pathData="M12,16h10v1.4h-10z M12,27h10v1.4h-10z M26,16h10v1.4h-10z M26,27h10v1.4h-10z" />
+</vector>
