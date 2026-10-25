@@ -46,3 +46,6 @@ web/data/
 Thumbs.db
 *.log
 *.tmp
+
+# Windows 快捷方式（含本机绝对路径，无意义）
+*.lnk
