@@ -215,6 +215,8 @@ adb install -r app\build\outputs\apk\release\app-release.apk
 2. 把 APK 传到手机（数据线 / 微信文件传输 / QQ / 网盘都行）
 3. 点开安装 → 打开「漫画书架」
 
+也可以在 GitHub 上下载：[Releases · v1.3.1](https://github.com/135790135790a/-pdf-apk/releases/tag/v1.3.1)
+
 **完全离线可用**：不需要电脑、不需要联网、不申请任何权限（只用系统文件选择器读你选的 PDF/图片）。
 
 已核对信息：
