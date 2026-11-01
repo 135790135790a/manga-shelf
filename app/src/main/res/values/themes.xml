@@ -7,7 +7,10 @@
       启动图（底色 + 居中的 App 图标）就和进来之后的界面一致，不会先闪一下黑。
       默认 Theme.MangaShelf 保持深色，给没有 setTheme 的公共路径兜底。
 
-      图标用 drawable-nodpi/splash_logo.png（512×512，layer-list 里限制成 160dp 居中显示），
+      启动图（v1.5.9 起）是「鲸鱼娘书架」：drawable-mdpi~xxhdpi/splash_whale(.jpg) 与
+      splash_whale_night.jpg，按屏幕密度自动选一张，360dp 宽等比缩放居中，底色与
+      DayBackground(#F6F4EF) / NightBackground(#16161B) 完全一致，所以冷启动窗口切到
+      Compose 首帧时不会有色差跳变。
       不引 androidx.core:core-splashscreen，避免给启动路径再增加一个依赖和初始化开销。
     -->
     <style name="Theme.MangaShelf" parent="android:Theme.Material.NoActionBar">

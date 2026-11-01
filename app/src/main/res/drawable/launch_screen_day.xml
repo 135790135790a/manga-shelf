@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 白天启动屏：暖白底 + 居中的 App 图标。图标用 drawable-mdpi~xxxhdpi/splash_logo.png（96dp），按屏幕密度自动选。 -->
+<!-- 白天启动屏：「鲸鱼娘书架」图，360dp 宽等比缩放后居中显示。 -->
+<!-- 图片五档密度放在 drawable-mdpi~xxhdpi/splash_whale.jpg，系统按屏幕密度自动选； -->
+<!-- 底色 = DayBackground(#F6F4EF)，冷启动窗口切到主界面不跳色。 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/splash_bg_light" />
     <item android:gravity="center">
         <bitmap
             android:gravity="center"
-            android:src="@drawable/splash_logo" />
+            android:src="@drawable/splash_whale" />
     </item>
 </layer-list>

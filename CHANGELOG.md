@@ -1,3 +1,28 @@
+## v1.5.9 — 2026-11-01
+
+### 修复
+
+- **分批导入不可用**：旧实现把 `vnd.android.document/directory` 传给 `OpenMultipleDocuments`（即 `ACTION_OPEN_DOCUMENT`），这个 Intent 在 Android 上只能选文件、选不了目录；能选目录的 `ACTION_OPEN_DOCUMENT_TREE` 又不支持多选。结果就是系统选择器里什么都选不中，回调拿不到任意 URI，界面上也没有"开始导入"这一步，看起来就是"点了没反应"。
+  - 现在：选父目录 → 弹窗列出子文件夹（`FolderImporter.listChildFolders`）→ 多选 → 「开始导入（N 批）」→ 走 v1.5.6 已有的批次队列（`ShelfViewModel.importFolders`），批次进度、页级进度、暂停/继续、跳过、单批重试全部沿用。
+  - 新增 `FolderImporter.inspect()`：只查元数据不解码，返回书册数、页数、总字节，最多扫 4000 个条目、每 64 条 yield。
+  - 新增 `ui/BatchImportDialog.kt`：已选列表 + 移除/清空/继续添加 + 汇总行。
+
+### 新增
+
+- **鲸鱼娘启动图**：`res/drawable-{mdpi,hdpi,xhdpi,xxhdpi}/splash_whale.jpg` 与 `splash_whale_night.jpg`。原图 1216×1952，按 360dp 宽等比生成五档里的四档，`layer-list` 居中不拉伸。浅色底 `#F6F4EF`、深色底 `#16161B`；深色版用连通域洪水填充把四周白底换成 `#16161B`、角色压暗到 0.78。JPEG q88 控制体积，全套 1.13 MB。
+- **设置页「存储空间」**：`data/StorageStats.kt` + `ui/StorageSection.kt`。按字节统计 pages / thumbs / database / backup / other，外加 `StatFs` 的可用与总量；IO 线程扫描、每 256 个文件 yield；点图例高亮扇区；带刷新与「上次统计」时间；空态与加载态齐备。
+
+### 其他
+
+- `ShelfViewModel.importFolders` 增加空列表短路。
+- 设置页「版本」行同步到 versionCode 20。
+
+### 校验
+
+- `verify-release.ps1` 七项全过
+- APK：8,667,988 字节（8.27 MB）
+- SHA-256：`84D76ECB1BEDEB48C4AB8A033D446E94660488194FBC9FA8C13E46F83099DE36`
+
 ## v1.5.8 — 2026-10-31
 
 ### 新增

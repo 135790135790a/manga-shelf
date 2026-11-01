@@ -29,6 +29,9 @@ object FolderImporter {
     private const val MAX_PAGES = 3000
     private const val MAX_DEPTH = 8
 
+    /** 分批导入前的预估最多扫这么多个目录条目，超出就标 truncated */
+    private const val MAX_INSPECT_ENTRIES = 4000
+
     /** 每转码这么多页让出一次 */
     private const val YIELD_EVERY_PAGES = 24
 
@@ -83,6 +86,63 @@ object FolderImporter {
             out.add(ChildFolder(name, key))
         }
         return out.sortedWith { a, b -> compareNatural(a.name, b.name) }
+    }
+
+    /** 分批导入前给用户看的预估：几本、几页、多大 */
+    class FolderStats(
+        val bookCount: Int,
+        val pageCount: Int,
+        val totalBytes: Long,
+        val truncated: Boolean
+    )
+
+    /**
+     * 只统计不读取：数这个父目录下有几个子文件夹（几本）、多少个图片文件、总共多少字节。
+     *
+     * 全部走 DocumentFile 的元数据查询，不解码图片，所以几百本书也就几秒。
+     * 仍然做了三重保护：最多扫 [MAX_INSPECT_ENTRIES] 个条目、每 64 个条目 yield 一次、
+     * 栈深度封顶，避免某些云盘 provider 上无限递归或卡死。
+     */
+    suspend fun inspect(context: Context, treeUri: Uri): FolderStats = withContext(Dispatchers.IO) {
+        val root = DocumentFile.fromTreeUri(context, treeUri)
+            ?: return@withContext FolderStats(0, 0, 0L, false)
+        val children = runCatching { root.listFiles() }.getOrNull()
+            ?: return@withContext FolderStats(0, 0, 0L, false)
+
+        var books = 0
+        var pages = 0
+        var bytes = 0L
+        val stack = ArrayDeque<DocumentFile>()
+        for (child in children) {
+            if (child.isDirectory) {
+                books++
+                stack.addLast(child)
+            } else if (isImage(child.name?.trim().orEmpty())) {
+                pages++
+                bytes += runCatching { child.length() }.getOrDefault(0L)
+            }
+        }
+
+        var scanned = 0
+        var truncated = false
+        while (stack.isNotEmpty()) {
+            if (scanned >= MAX_INSPECT_ENTRIES) {
+                truncated = true
+                break
+            }
+            if (++scanned % 64 == 0) yield()
+            val dir = stack.removeLast()
+            val kids = runCatching { dir.listFiles() }.getOrNull() ?: continue
+            for (kid in kids) {
+                if (kid.isDirectory) {
+                    if (stack.size < 512) stack.addLast(kid)
+                } else if (isImage(kid.name?.trim().orEmpty())) {
+                    pages++
+                    bytes += runCatching { kid.length() }.getOrDefault(0L)
+                }
+            }
+        }
+        FolderStats(books, pages, bytes, truncated)
     }
 
     /**

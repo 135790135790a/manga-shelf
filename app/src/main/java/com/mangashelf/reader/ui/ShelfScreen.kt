@@ -90,6 +90,7 @@ import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import androidx.documentfile.provider.DocumentFile
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -105,14 +106,17 @@ import com.mangashelf.reader.data.Diagnostics
 import com.mangashelf.reader.data.ImportSortPrefs
 import com.mangashelf.reader.data.PageSortMode
 import com.mangashelf.reader.data.SearchHistory
+import com.mangashelf.reader.importer.FolderImporter
 import com.mangashelf.reader.ui.theme.ComicScrim
 import com.mangashelf.reader.ui.theme.ThemeMode
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -148,6 +152,12 @@ fun ShelfScreen(
     var showImportDialog by remember { mutableStateOf(false) }
     // 导入前的排序选择（图片/文件夹两种来源各自记默认值）
     var pendingSort by remember { mutableStateOf<PendingImport?>(null) }
+    // v1.5.9：分批导入的待导入文件夹。系统的文件夹选择器只能单选，
+    // 「多选」改由 App 自己承担：加一个算一个，最后一次性提交成多个批次。
+    var batchDialogOpen by remember { mutableStateOf(false) }
+    var batchPicks by remember { mutableStateOf<List<BatchPick>>(emptyList()) }
+    var batchScanning by remember { mutableStateOf(false) }
+    val batchScope = rememberCoroutineScope()
     // 长按「保存到相册」要导整本还是只导封面
     var saveChoiceBookId by remember { mutableStateOf<Long?>(null) }
     // Android 9 及以下写相册要先要存储权限；等授权时把待保存的参数缓存起来
@@ -258,23 +268,50 @@ fun ShelfScreen(
         }
     }
 
-    // v1.5.6：一次选多个文件夹，每个文件夹成为一批（批里每个子目录 = 一本书）
-    val foldersPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenMultipleDocuments()
-    ) { uris ->
-        if (uris.isNotEmpty()) {
-            uris.forEach { uri ->
-                runCatching {
-                    context.contentResolver.takePersistableUriPermission(
-                        uri,
-                        Intent.FLAG_GRANT_READ_URI_PERMISSION
-                    )
+    // v1.5.9：分批导入改成「一次加一个父目录」。
+    // 旧实现用 OpenMultipleDocuments + directory MIME 是行不通的：
+    // ACTION_OPEN_DOCUMENT 根本选不了目录，能选目录的 ACTION_OPEN_DOCUMENT_TREE 又不支持多选。
+    // 多选因此在 App 里做——每选一次就扫描子文件夹数/页数/体积，追加到 batchPicks。
+    val batchFolderPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            if (batchPicks.any { it.uri == uri }) {
+                viewModel.notify("这个文件夹已经添加过了")
+            } else {
+                batchScanning = true
+                batchScope.launch {
+                    val stats = withContext(Dispatchers.IO) {
+                        runCatching { FolderImporter.inspect(context, uri) }
+                            .getOrDefault(FolderImporter.FolderStats(0, 0, 0L, false))
+                    }
+                    val name = withContext(Dispatchers.IO) {
+                        runCatching { DocumentFile.fromTreeUri(context, uri)?.name }.getOrNull()
+                    } ?: "文件夹 ${batchPicks.size + 1}"
+                    if (stats.bookCount == 0 && stats.pageCount == 0) {
+                        viewModel.notify("「$name」里既没有子文件夹也没有图片，导不出内容")
+                    } else {
+                        batchPicks = batchPicks + BatchPick(
+                            uri = uri,
+                            name = name,
+                            bookCount = stats.bookCount,
+                            pageCount = stats.pageCount,
+                            bytes = stats.totalBytes,
+                            truncated = stats.truncated
+                        )
+                    }
+                    batchScanning = false
                 }
             }
-            viewModel.importFolders(uris)
         }
     }
-    val launchFolders = { foldersPicker.launch(arrayOf("vnd.android.document/directory")) }
+    val launchBatchPick = { batchFolderPicker.launch(null) }
 
     val launchPdf = { pdfPicker.launch(arrayOf("application/pdf")) }
     val launchImages = { imagePicker.launch(arrayOf("image/*")) }
@@ -776,7 +813,8 @@ fun ShelfScreen(
                     Button(
                         onClick = {
                             showImportDialog = false
-                            launchFolders()
+                            batchDialogOpen = true
+                            launchBatchPick()
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -873,6 +911,27 @@ fun ShelfScreen(
             },
             dismissButton = {
                 TextButton(onClick = { confirmDeleteSelected = false }) { Text("取消") }
+            }
+        )
+    }
+
+    if (batchDialogOpen) {
+        BatchImportDialog(
+            picks = batchPicks,
+            scanning = batchScanning,
+            onAddFolder = { launchBatchPick() },
+            onRemove = { uri -> batchPicks = batchPicks.filterNot { it.uri == uri } },
+            onClear = { batchPicks = emptyList() },
+            onStart = {
+                val uris = batchPicks.map { it.uri }
+                batchDialogOpen = false
+                batchPicks = emptyList()
+                batchScanning = false
+                viewModel.importFolders(uris)
+            },
+            onDismiss = {
+                batchDialogOpen = false
+                batchScanning = false
             }
         )
     }

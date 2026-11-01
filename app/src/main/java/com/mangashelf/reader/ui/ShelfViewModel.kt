@@ -242,6 +242,11 @@ class ShelfViewModel(application: Application) : AndroidViewModel(application) {
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
+    /** 界面自己产生的提示（例如文件夹重复添加），复用同一个提示通道 */
+    fun notify(text: String) {
+        _message.value = text
+    }
+
     /**
      * v1.5.6：批量操作门闩。
      *
@@ -541,6 +546,7 @@ class ShelfViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun importFolders(uris: List<Uri>) {
         if (isBusy()) return
+        if (uris.isEmpty()) return
         _batchRows.value = emptyList()
         importJob = viewModelScope.launch {
             val specs = ArrayList<BatchSpec>()

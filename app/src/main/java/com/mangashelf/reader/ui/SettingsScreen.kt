@@ -26,9 +26,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,7 +46,9 @@ import com.mangashelf.reader.data.EyeScope
 import com.mangashelf.reader.data.ImportSortPrefs
 import com.mangashelf.reader.data.PageSortMode
 import com.mangashelf.reader.data.SearchHistory
+import com.mangashelf.reader.data.StorageStats
 import com.mangashelf.reader.ui.theme.ThemeMode
+import kotlinx.coroutines.launch
 
 /**
  * 统一设置页（v1.5.8）。
@@ -118,6 +122,21 @@ fun SettingsScreen(
         mutableStateOf(runCatching { SearchHistory.load(context).size }.getOrDefault(0))
     }
     var lastBackup by remember { mutableStateOf(runCatching { AutoBackupProxy.lastName(context) }.getOrNull().orEmpty()) }
+
+    // v1.5.9：存储占比。统计放 IO 线程，进页面先扫一次，之后可手动刷新。
+    var storageSample by remember { mutableStateOf<StorageStats.Sample?>(null) }
+    var storageLoading by remember { mutableStateOf(false) }
+    val storageScope = rememberCoroutineScope()
+    val refreshStorage: () -> Unit = {
+        if (!storageLoading) {
+            storageLoading = true
+            storageScope.launch {
+                storageSample = runCatching { StorageStats.collect(context) }.getOrNull()
+                storageLoading = false
+            }
+        }
+    }
+    LaunchedEffect(Unit) { refreshStorage() }
 
     var dialog by remember { mutableStateOf(SettingsDialog.NONE) }
     var confirmReset by remember { mutableStateOf(false) }
@@ -225,9 +244,20 @@ fun SettingsScreen(
             item { SettingsRow("导出完整备份", "数据库 + 全部图片，zip 存到所选目录") { onExportZip() } }
             item { SettingsRow("从完整备份恢复", "选择之前导出的 zip") { onImportZip() } }
 
+            // ---------- 存储空间（v1.5.9）----------
+            item { GroupHeader("存储空间") }
+            item {
+                StoragePieSection(
+                    sample = storageSample,
+                    loading = storageLoading,
+                    onRefresh = refreshStorage,
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+            }
+
             // ---------- 关于 ----------
             item { GroupHeader("关于") }
-            item { SettingsRow("版本", "v$versionName（versionCode 19）") {} }
+            item { SettingsRow("版本", "v$versionName（versionCode 20）") {} }
             item { SettingsRow("数据库", "Room v8 · 无云端同步 · 不联网") {} }
             item {
                 SettingsRow("恢复默认设置", "主题、视图、护眼、手势、排序全部复位") {
