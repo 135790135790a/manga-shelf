@@ -28,6 +28,18 @@ import kotlin.system.exitProcess
 
 class MangaShelfApp : Application(), ImageLoaderFactory {
 
+    companion object {
+        /**
+         * v1.5.9：开场界面是否已经播过。
+         *
+         * 放在 companion 而不是 Activity 的 savedInstanceState 里，是为了做到
+         * 「一次进程只播一次」——旋转屏幕、切后台回来、Activity 重建都不重播。
+         * 进程被系统杀掉重开时自然回到 false，正好再播一次。
+         */
+        @Volatile
+        var splashShown: Boolean = false
+    }
+
     @Volatile
     private var repositoryRef: BookRepository? = null
 

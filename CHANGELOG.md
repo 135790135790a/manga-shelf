@@ -10,7 +10,10 @@
 ### 新增
 
 - **鲸鱼娘启动图**：`res/drawable-{mdpi,hdpi,xhdpi,xxhdpi}/splash_whale.jpg` 与 `splash_whale_night.jpg`。原图 1216×1952，按 360dp 宽等比生成五档里的四档，`layer-list` 居中不拉伸。浅色底 `#F6F4EF`、深色底 `#16161B`；深色版用连通域洪水填充把四周白底换成 `#16161B`、角色压暗到 0.78。JPEG q88 控制体积，全套 1.13 MB。
-- **设置页「存储空间」**：`data/StorageStats.kt` + `ui/StorageSection.kt`。按字节统计 pages / thumbs / database / backup / other，外加 `StatFs` 的可用与总量；IO 线程扫描、每 256 个文件 yield；点图例高亮扇区；带刷新与「上次统计」时间；空态与加载态齐备。
+- **设置页「存储空间」**：`data/StorageStats.kt` + `ui/StorageSection.kt`。按字节统计 source / pages / thumbs / database / backup / other，外加 `StatFs` 的可用与总量；IO 线程扫描、每 256 个文件 yield；点图例高亮扇区；带刷新与「上次统计」时间；空态与加载态齐备。
+- **存储占比细化到单本**：`StorageStats` 增加 `BookStat`（名称/页数/导入时间/原文件/页面/缩略图/合计）与 5 分钟结果缓存；`ui/StorageSection.kt` 增加「分类占比 / 按漫画占比」切换（Top8 + 其他）；新增 `ui/StorageBooksScreen.kt` 全屏列表（搜索、四种排序、单本详情、清理缩略图）与 `data/StorageCleaner.kt`；`BookDao.allBooks()` 供一次取全。
+  - 修口径：旧代码 `else pages += child.length()` 把 `comics/<书>/` 下的 `source.pdf` 也算进漫画页面，现在单列「原文件」，无副本时用 `Book.sourceSizeBytes` 兜底并标「估算」。
+- **开场界面可调**：`data/SplashPrefs.kt`（0/1/2/3/5 秒，默认 2 秒）+ `ui/SplashOverlay.kt`（Compose 层，同图同位置接 `windowBackground`，淡出后可跳过）；`MainActivity` 冷启动挂载、`MangaShelfApp.splashShown` 保证一进程只播一次；设置页「启动与开场」分组含时长选择与「重新查看开场」预览。
 
 ### 其他
 

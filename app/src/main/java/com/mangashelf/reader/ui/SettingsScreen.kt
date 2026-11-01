@@ -6,7 +6,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.graphics.luminance
+import com.mangashelf.reader.data.SplashPrefs
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -46,6 +49,7 @@ import com.mangashelf.reader.data.EyeScope
 import com.mangashelf.reader.data.ImportSortPrefs
 import com.mangashelf.reader.data.PageSortMode
 import com.mangashelf.reader.data.SearchHistory
+import com.mangashelf.reader.data.AppDatabase
 import com.mangashelf.reader.data.StorageStats
 import com.mangashelf.reader.ui.theme.ThemeMode
 import kotlinx.coroutines.launch
@@ -123,20 +127,43 @@ fun SettingsScreen(
     }
     var lastBackup by remember { mutableStateOf(runCatching { AutoBackupProxy.lastName(context) }.getOrNull().orEmpty()) }
 
+    // v1.5.9 追加：开场界面时长 + 预览
+    var splashMs by remember { mutableStateOf(runCatching { SplashPrefs.load(context) }.getOrDefault(SplashPrefs.DEFAULT_MS)) }
+    var splashPreview by remember { mutableStateOf(false) }
+
     // v1.5.9：存储占比。统计放 IO 线程，进页面先扫一次，之后可手动刷新。
+    // v1.5.9 追加：带上全部书才能按漫画统计；结果有 5 分钟缓存，刷新走 force。
     var storageSample by remember { mutableStateOf<StorageStats.Sample?>(null) }
     var storageLoading by remember { mutableStateOf(false) }
+    var storageBooks by remember { mutableStateOf<StorageStats.Sample?>(null) }
+    var storageFocusBook by remember { mutableStateOf<Long?>(null) }
     val storageScope = rememberCoroutineScope()
     val refreshStorage: () -> Unit = {
         if (!storageLoading) {
             storageLoading = true
             storageScope.launch {
-                storageSample = runCatching { StorageStats.collect(context) }.getOrNull()
+                storageSample = runCatching {
+                    val books = AppDatabase.get(context).bookDao().allBooks()
+                    StorageStats.collect(context, books, force = true)
+                }.getOrNull()
                 storageLoading = false
             }
         }
     }
     LaunchedEffect(Unit) { refreshStorage() }
+
+    storageBooks?.let { sample ->
+        StorageBooksScreen(
+            initial = sample,
+            focusBookId = storageFocusBook,
+            onBack = {
+                storageBooks = null
+                storageFocusBook = null
+                refreshStorage()
+            }
+        )
+        return
+    }
 
     var dialog by remember { mutableStateOf(SettingsDialog.NONE) }
     var confirmReset by remember { mutableStateOf(false) }
@@ -148,6 +175,7 @@ fun SettingsScreen(
         }.getOrNull().orEmpty()
     }
 
+    Box(Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -180,6 +208,15 @@ fun SettingsScreen(
             }
             item {
                 SettingsRow("封面质量", coverQuality.label) { dialog = SettingsDialog.COVER }
+            }
+
+            // ---------- 启动与开场 ----------
+            item { GroupHeader("启动与开场") }
+            item {
+                SettingsRow("开场界面时长", SplashPrefs.label(splashMs)) { dialog = SettingsDialog.SPLASH }
+            }
+            item {
+                SettingsRow("重新查看开场", "不重启应用，预览启动画面") { splashPreview = true }
             }
 
             // ---------- 阅读与手势 ----------
@@ -251,13 +288,19 @@ fun SettingsScreen(
                     sample = storageSample,
                     loading = storageLoading,
                     onRefresh = refreshStorage,
+                    onOpenBooks = { bookId ->
+                        storageSample?.let { s ->
+                            storageFocusBook = bookId
+                            storageBooks = s
+                        }
+                    },
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
             }
 
             // ---------- 关于 ----------
             item { GroupHeader("关于") }
-            item { SettingsRow("版本", "v$versionName（versionCode 20）") {} }
+            item { SettingsRow("版本", "v$versionName（versionCode 21）") {} }
             item { SettingsRow("数据库", "Room v8 · 无云端同步 · 不联网") {} }
             item {
                 SettingsRow("恢复默认设置", "主题、视图、护眼、手势、排序全部复位") {
@@ -296,6 +339,16 @@ fun SettingsScreen(
         ) {
             coverQuality = it
             CoverPrefs.save(context, it)
+            dialog = SettingsDialog.NONE
+        }
+
+        SettingsDialog.SPLASH -> ChoiceDialog(
+            title = "开场界面时长",
+            options = SplashPrefs.OPTIONS.map { it to SplashPrefs.label(it) },
+            current = splashMs
+        ) {
+            splashMs = it
+            SplashPrefs.save(context, it)
             dialog = SettingsDialog.NONE
         }
 
@@ -390,11 +443,22 @@ fun SettingsScreen(
             }
         )
     }
+
+    // v1.5.9 追加：开场预览（覆盖整页，点「关闭」返回设置）
+    if (splashPreview) {
+        SplashOverlay(
+            durationMs = 0,
+            night = MaterialTheme.colorScheme.background.luminance() < 0.5f,
+            preview = true,
+            onFinish = { splashPreview = false }
+        )
+    }
+    }
 }
 
 /** 设置页内部用到的对话框枚举 */
 private enum class SettingsDialog {
-    NONE, THEME, LAYOUT, COVER, SENSITIVITY, IMPORT_FOLDER, IMPORT_IMAGE, EYE_HOME, EYE_READER
+    NONE, THEME, LAYOUT, COVER, SPLASH, SENSITIVITY, IMPORT_FOLDER, IMPORT_IMAGE, EYE_HOME, EYE_READER
 }
 
 /** 因为 AutoBackup 的 list() 在 data 包，这里包一层只是为了「最近一次备份」的展示。 */

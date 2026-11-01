@@ -18,6 +18,10 @@ interface BookDao {
     @Query("SELECT * FROM books WHERE id = :id")
     suspend fun get(id: Long): Book?
 
+    /** v1.5.9：存储统计要一次性拿到全部书（含回收站里的），不走 Flow */
+    @Query("SELECT * FROM books ORDER BY createdAt DESC")
+    suspend fun allBooks(): List<Book>
+
     @Insert
     suspend fun insert(book: Book): Long
 
@@ -37,10 +41,6 @@ interface BookDao {
     /** 启动时清理孤儿目录用：这些目录还要，其余的可以删 */
     @Query("SELECT folder FROM books")
     suspend fun allFolders(): List<String>
-
-    /** 备份用：一次性拿全部书（不走 Flow） */
-    @Query("SELECT * FROM books ORDER BY createdAt ASC")
-    suspend fun allBooks(): List<Book>
 
     /** v1.5.5 编辑信息：作者与标签，供书架搜索命中 */
     @Query("UPDATE books SET author = :author, tags = :tags WHERE id = :id")

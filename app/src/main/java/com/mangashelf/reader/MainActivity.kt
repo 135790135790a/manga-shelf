@@ -8,18 +8,22 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import com.mangashelf.reader.data.EyeScope
+import com.mangashelf.reader.data.SplashPrefs
 import com.mangashelf.reader.ui.FileBrowserScreen
 import com.mangashelf.reader.ui.PageManageScreen
 import com.mangashelf.reader.ui.ReaderScreen
 import com.mangashelf.reader.ui.ShelfScreen
+import com.mangashelf.reader.ui.SplashOverlay
 import com.mangashelf.reader.ui.eyeCare
 import com.mangashelf.reader.ui.rememberEyeState
 import com.mangashelf.reader.ui.theme.MangaShelfTheme
@@ -42,6 +46,12 @@ class MainActivity : ComponentActivity() {
                 var openBookId by rememberSaveable { mutableStateOf(NO_BOOK) }
                 var manageBookId by rememberSaveable { mutableStateOf(NO_BOOK) }
                 var browserOpen by rememberSaveable { mutableStateOf(false) }
+
+                // v1.5.9：冷启动开场界面（鲸鱼娘书架）。一次进程只播一次。
+                var showSplash by remember { mutableStateOf(!MangaShelfApp.splashShown) }
+                val splashMs = remember { SplashPrefs.load(context) }
+
+                Box(Modifier.fillMaxSize()) {
                 when {
                     browserOpen -> FileBrowserScreen(
                         onBack = { browserOpen = false },
@@ -75,6 +85,19 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     }
+                }
+
+                // v1.5.9：开场层压在主内容之上，淡出后露出书架
+                if (showSplash && splashMs > 0) {
+                    SplashOverlay(
+                        durationMs = splashMs,
+                        night = MaterialTheme.colorScheme.background.luminance() < 0.5f,
+                        onFinish = {
+                            showSplash = false
+                            MangaShelfApp.splashShown = true
+                        }
+                    )
+                }
                 }
             }
         }
