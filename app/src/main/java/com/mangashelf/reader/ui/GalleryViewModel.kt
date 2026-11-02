@@ -22,6 +22,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -57,6 +59,8 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     val asc: StateFlow<Boolean> = _asc.asStateFlow()
 
     private val _busy = MutableStateFlow<String?>(null)
+    /** 导入串行化：单独导入与批量导入共用同一把锁，避免并发送 index 冲突 */
+    private val importMutex = Mutex()
     val busy: StateFlow<String?> = _busy.asStateFlow()
 
     private val _message = MutableStateFlow<String?>(null)
@@ -212,11 +216,13 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    /** 导入图片：逐张复制进私有目录，再写库。单张失败跳过，不中断整批 */
+    /** 导入图片：逐张复制进私有目录，再写库。单张失败跳过，不中断整批。
+     *  用 Mutex 串行化，避免用户连点「导入」时两个批次同时写同一个文件夹的 sortIndex。 */
     fun importImages(uris: List<Uri>) {
         if (uris.isEmpty()) return
         val folderId = _currentId.value
         viewModelScope.launch {
+            importMutex.withLock {
             _busy.value = "正在导入 0 / ${uris.size}"
             val done = withContext(Dispatchers.IO) {
                 val copied = ArrayList<ImageItem>(uris.size)
@@ -257,6 +263,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 else "已导入 ${done.size} 张图片"
             )
             refresh()
+            }
         }
     }
 
