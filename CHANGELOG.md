@@ -20,6 +20,8 @@
 
 ### 其他
 
+- 顶栏工作栏切换做成搜索左侧的分段控件（`ui/WorkspaceSwitch.kt`），漫画页与图片页共用
+- 图片导入完成后写一条 `import_batches` 记录（`sourceType = "GALLERY"`），「导入历史」里可与漫画导入区分
 - `ShelfScreen` 顶栏新增「图片」入口；`MainActivity` 增加图片工作栏状态（`rememberSaveable`）
 - `PageManageScreen` 排序菜单新增「导出这本书」
 
@@ -27,7 +29,7 @@
 
 - `assembleRelease` 通过，`testDebugUnitTest` 4/4
 - `verify-release.ps1` 七项通过
-- APK 8,799,212 B（8.39 MB），SHA-256 `FCCCB9C574B8E2F993FC434E48FCA72D1633BB5FB51C01B5C354DBFB769618B1`
+- APK 8,803,080 B（8.40 MB），SHA-256 `A10CFB7DD9F8BE88A498641EA0B44B797EEB4C1045D2F8816B1BA9A3C76CE74F`
 
 ## v1.5.9 — 2026-11-01
 

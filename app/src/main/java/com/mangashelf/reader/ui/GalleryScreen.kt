@@ -160,6 +160,12 @@ fun GalleryScreen(
                     }
                 },
                 actions = {
+                    WorkspaceSwitch(
+                        current = com.mangashelf.reader.data.GalleryPrefs.WORKSPACE_GALLERY,
+                        onComic = onBack,
+                        onGallery = { },
+                        modifier = Modifier.padding(end = 4.dp)
+                    )
                     IconButton(onClick = { showImportSheet = true }) {
                         Icon(Icons.Filled.Add, contentDescription = "导入图片")
                     }

@@ -7,6 +7,7 @@ import android.provider.OpenableColumns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.mangashelf.reader.MangaShelfApp
+import com.mangashelf.reader.data.AppDatabase
 import com.mangashelf.reader.data.GalleryLayout
 import com.mangashelf.reader.data.GalleryPrefs
 import com.mangashelf.reader.data.GalleryRepository
@@ -14,6 +15,7 @@ import com.mangashelf.reader.data.GallerySort
 import com.mangashelf.reader.data.GalleryStorage
 import com.mangashelf.reader.data.ImageFolder
 import com.mangashelf.reader.data.ImageItem
+import com.mangashelf.reader.data.ImportBatch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -230,6 +232,26 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 copied
             }
             _busy.value = null
+            if (done.isNotEmpty()) {
+                // 记一条导入历史，来源标 GALLERY，这样「导入历史」里能和漫画导入区分开
+                runCatching {
+                    val now = System.currentTimeMillis()
+                    AppDatabase.get(app).importBatchDao().insert(
+                        ImportBatch(
+                            batchId = "gallery-$now",
+                            createdAt = now,
+                            finishedAt = now,
+                            sourceType = "GALLERY",
+                            status = ImportBatch.DONE,
+                            totalBooks = 1,
+                            doneBooks = 1,
+                            totalPages = done.size,
+                            donePages = done.size,
+                            sizeBytes = done.sumOf { it.sizeBytes }
+                        )
+                    )
+                }
+            }
             notify(
                 if (done.isEmpty()) "没有导入任何图片（格式不支持或读取失败）"
                 else "已导入 ${done.size} 张图片"

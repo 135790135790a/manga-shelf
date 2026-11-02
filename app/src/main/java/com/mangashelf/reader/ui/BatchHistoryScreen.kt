@@ -424,6 +424,8 @@ private fun sourceText(source: String): String = when (source) {
     "PDF" -> "PDF"
     "IMAGE" -> "图片"
     "CBZ" -> "CBZ"
+    // 图片工作栏的导入记录，与上面几种漫画来源区分开
+    "GALLERY" -> "图片工作栏"
     else -> source
 }
 

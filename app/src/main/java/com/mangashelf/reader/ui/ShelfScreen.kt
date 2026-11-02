@@ -590,10 +590,13 @@ fun ShelfScreen(
                     titleContentColor = MaterialTheme.colorScheme.onBackground
                 ),
                 actions = {
-                    // 工作栏切换：书架 ⇄ 图片，两边的数据完全隔离
-                    TextButton(onClick = onOpenGallery) {
-                        Text("图片", color = MaterialTheme.colorScheme.onBackground)
-                    }
+                    // 工作栏切换：漫画 ⇄ 图片，两边的数据完全隔离
+                    WorkspaceSwitch(
+                        current = com.mangashelf.reader.data.GalleryPrefs.WORKSPACE_COMIC,
+                        onComic = { },
+                        onGallery = onOpenGallery,
+                        modifier = Modifier.padding(end = 4.dp)
+                    )
                     IconButton(onClick = { searchPageOpen = true }) {
                         Icon(Icons.Rounded.Search, contentDescription = "搜索")
                     }
