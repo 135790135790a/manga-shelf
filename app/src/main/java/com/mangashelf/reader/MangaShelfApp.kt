@@ -12,6 +12,8 @@ import com.mangashelf.reader.data.AppDatabase
 import com.mangashelf.reader.data.AutoBackup
 import com.mangashelf.reader.data.BookRepository
 import com.mangashelf.reader.data.ComicStorage
+import com.mangashelf.reader.data.GalleryRepository
+import com.mangashelf.reader.data.GalleryStorage
 import com.mangashelf.reader.data.StartupGuard
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -53,6 +55,17 @@ class MangaShelfApp : Application(), ImageLoaderFactory {
         }
 
     private val background = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** 图片工作栏的存储（files/gallery/） */
+    val galleryStorage: GalleryStorage by lazy { GalleryStorage(this) }
+
+    /**
+     * 图片工作栏仓库。和书架那套完全分开：独立的表和目录。
+     * 图片栏是后加的，不参与书库损坏自愈的那套引用复位逻辑。
+     */
+    val galleryRepository: GalleryRepository by lazy {
+        GalleryRepository(AppDatabase.get(this).imageDao(), galleryStorage)
+    }
 
     /** 本次进程是否处于安全模式（连续启动失败后的降级形态，见 [StartupGuard]） */
     val safeMode: Boolean

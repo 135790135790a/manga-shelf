@@ -1,3 +1,34 @@
+## v1.6.0 — 2026-11-02
+
+### 新增
+
+- **漫画导出（四种格式）**：`export/Exporter.kt` + `ui/ExportDialogs.kt`。入口三处（长按菜单 / 多选批量栏 / 页面管理页菜单）。
+  - 原始 PDF：直接复制 `comics/<书>/source.pdf`，没有源文件时置灰
+  - 重排 PDF：`PdfDocument` 按当前页序把可见页合成，`drawColor(WHITE)` 打底避免透明变黑
+  - ZIP：`ZipOutputStream` 逐页写入，可选带 `thumbs/`
+  - 长图：先只读尺寸算分片，`MAX_SLICE_HEIGHT = 8000`、`MAX_WIDTH = 1440`，逐页解码绘制后立即 `recycle()`
+  - 每次弹系统目录选择器（`OpenDocumentTree`），进度可取消，批量逐本继续、失败不中断
+- **图片工作栏**：`data/ImageFolder.kt`、`ImageItem.kt`、`ImageDao.kt`、`GalleryStorage.kt`、`GalleryPrefs.kt`、`GalleryRepository.kt` + `ui/GalleryViewModel.kt`、`GalleryScreen.kt`。与漫画书架完全隔离：独立表、独立目录 `files/gallery/`、独立偏好 `gallery_prefs`。
+  - 支持多级文件夹（`parentId` 递归，64 层护栏），移动只改整数列、不复制文件
+  - 四种排序 + 三档视图 + 多选批量
+- **权限面板**：`ui/PermissionSection.kt`。设置 → 权限，显示通知 / 相册读取状态，可按需申请。冷启动零权限申请。
+- **存储统计**：新增「图片工作栏」切片。
+
+### 数据库
+
+- `version 8 → 9`，`MIGRATION_8_9` 建 `image_folders` / `image_items` 两表与三条索引。
+
+### 其他
+
+- `ShelfScreen` 顶栏新增「图片」入口；`MainActivity` 增加图片工作栏状态（`rememberSaveable`）
+- `PageManageScreen` 排序菜单新增「导出这本书」
+
+### 校验
+
+- `assembleRelease` 通过，`testDebugUnitTest` 4/4
+- `verify-release.ps1` 七项通过
+- APK 8,799,212 B（8.39 MB），SHA-256 `FCCCB9C574B8E2F993FC434E48FCA72D1633BB5FB51C01B5C354DBFB769618B1`
+
 ## v1.5.9 — 2026-11-01
 
 ### 修复

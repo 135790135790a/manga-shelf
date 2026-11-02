@@ -16,6 +16,7 @@ import com.mangashelf.reader.data.ImportBatch
 import com.mangashelf.reader.data.ImportSortPrefs
 import com.mangashelf.reader.data.ImportStatusMachine
 import com.mangashelf.reader.data.BatchReportExporter
+import com.mangashelf.reader.export.Exporter
 import com.mangashelf.reader.service.ImportControl
 import com.mangashelf.reader.service.ImportForegroundService
 import com.mangashelf.reader.data.ImportTask
@@ -1402,10 +1403,101 @@ class ShelfViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // ---------------------------------------------------------------- 导出
+
+    private var exportJob: Job? = null
+
+    private val _exportState = MutableStateFlow<ExportState?>(null)
+    val exportState: StateFlow<ExportState?> = _exportState.asStateFlow()
+
+    /**
+     * 批量导出。
+     *
+     * 逐本执行，单本失败不影响后面的（需求一.5「单本失败不阻塞其他」）。
+     * 每本用「当前可见页 + 当前顺序」，也就是页面管理里软删掉的页不导、
+     * 手动拖过的页按新顺序导。
+     */
+    /** 这本书是否保留了原始 PDF：决定导出菜单里「原始 PDF」能否点 */
+    fun hasOriginalPdf(book: Book): Boolean =
+        runCatching { repo.storage.sourcePdf(book.folder).isFile }.getOrDefault(false)
+
+    fun startExport(books: List<Book>, format: Exporter.Format, treeUri: Uri) {
+        if (books.isEmpty()) return
+        exportJob?.cancel()
+        exportJob = viewModelScope.launch {
+            val app = getApplication<Application>()
+            val target = withContext(Dispatchers.IO) { DocumentFile.fromTreeUri(app, treeUri) }
+            if (target == null) {
+                notify("目标目录不可用，请重新选择")
+                return@launch
+            }
+            val results = mutableListOf<ExportItemResult>()
+            books.forEachIndexed { index, book ->
+                val pages = runCatching { repo.visiblePageEntries(book) }.getOrDefault(emptyList())
+                _exportState.value = ExportState.Running(
+                    ExportProgress(book.title, index + 1, books.size, "准备导出", 0, pages.size)
+                )
+                val r = runCatching {
+                    Exporter.exportBook(
+                        context = app,
+                        storage = repo.storage,
+                        book = book,
+                        pages = pages,
+                        format = format,
+                        targetDir = target,
+                        baseName = book.title
+                    ) { p ->
+                        _exportState.value = ExportState.Running(
+                            ExportProgress(book.title, index + 1, books.size, p.phase, p.current, p.total)
+                        )
+                    }
+                }.getOrElse { e ->
+                    Exporter.Result(false, message = e.message ?: "导出失败")
+                }
+                results += ExportItemResult(book.title, r.ok, r.message, r.uris.map { it.toString() })
+            }
+            _exportState.value = ExportState.Finished(results)
+        }
+    }
+
+    fun cancelExport() {
+        exportJob?.cancel()
+        exportJob = null
+        _exportState.value = null
+    }
+
+    fun dismissExport() {
+        _exportState.value = null
+    }
+
     private fun newBatchId(): String =
         "b" + System.currentTimeMillis().toString(36) + "-" +
             java.util.UUID.randomUUID().toString().take(4)
 
     private fun documentIdOf(uri: Uri): String? =
         runCatching { DocumentsContract.getDocumentId(uri) }.getOrNull()
+}
+
+// ------------------------------------------------------------------ 导出状态
+
+data class ExportProgress(
+    val title: String,
+    val bookIndex: Int,
+    val bookTotal: Int,
+    val phase: String,
+    val current: Int,
+    val total: Int
+)
+
+data class ExportItemResult(
+    val title: String,
+    val ok: Boolean,
+    val message: String,
+    /** 生成的文件 uri 字符串（长图分片时会有多个），供「打开」跳转 */
+    val uris: List<String>
+)
+
+sealed interface ExportState {
+    data class Running(val progress: ExportProgress) : ExportState
+    data class Finished(val results: List<ExportItemResult>) : ExportState
 }

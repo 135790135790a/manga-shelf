@@ -169,8 +169,10 @@ object StorageStats {
             val backup = sumDir(backupRoot)
             val database = sumDir(dbRoot)
             val filesTotal = sumDir(filesDir)
-            // other = files 里除 comics（source+pages+thumbs）与 backup 之外的其余东西
-            val other = (filesTotal - sourceTotal - pageTotal - thumbTotal - backup)
+            // v1.6.0：图片工作栏的占用单独一块，不和漫画混在一起
+            val gallery = sumDir(File(filesDir, "gallery"))
+            // other = files 里除 comics（source+pages+thumbs）、backup、gallery 之外的其余东西
+            val other = (filesTotal - sourceTotal - pageTotal - thumbTotal - backup - gallery)
                 .coerceAtLeast(0L)
 
             val stat = runCatching { StatFs(filesDir.absolutePath) }.getOrNull()
@@ -182,6 +184,7 @@ object StorageStats {
                     Slice("source", "原文件", sourceTotal),
                     Slice("pages", "漫画页面", pageTotal),
                     Slice("thumbs", "缩略图", thumbTotal),
+                    Slice("gallery", "图片栏", gallery),
                     Slice("database", "数据库", database),
                     Slice("backup", "备份", backup),
                     Slice("other", "其他", other)

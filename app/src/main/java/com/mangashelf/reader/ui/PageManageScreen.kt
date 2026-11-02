@@ -45,7 +45,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -62,6 +65,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.documentfile.provider.DocumentFile
+import com.mangashelf.reader.MangaShelfApp
+import com.mangashelf.reader.export.Exporter
+import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -108,6 +115,37 @@ fun PageManageScreen(
     var confirmPurge by remember { mutableStateOf(false) }
     // 排序模式：拖格子调顺序。平时关掉，避免和「点选/滚动」抢手势
     var reorderMode by remember { mutableStateOf(false) }
+
+    // v1.6.0：从这里也能导出当前这本书（第三处导出入口）
+    val exportCtx = LocalContext.current
+    val exportScope = rememberCoroutineScope()
+    var exportPickFormat by remember { mutableStateOf(false) }
+    var exportFormat by remember { mutableStateOf<Exporter.Format?>(null) }
+    val exportPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        val fmt = exportFormat
+        exportFormat = null
+        val currentBook = book
+        if (uri != null && fmt != null && currentBook != null) {
+            val target = DocumentFile.fromTreeUri(exportCtx, uri)
+            if (target != null) {
+                exportScope.launch {
+                    val storage = (exportCtx.applicationContext as MangaShelfApp).repository.storage
+                    val res = Exporter.exportBook(
+                        context = exportCtx,
+                        storage = storage,
+                        book = currentBook,
+                        pages = pages.filter { it.deleted == 0 },
+                        format = fmt,
+                        targetDir = target,
+                        baseName = currentBook.title
+                    )
+                    snackbar.showSnackbar(res.message)
+                }
+            }
+        }
+    }
 
     LaunchedEffect(message) {
         message?.let {
@@ -190,6 +228,13 @@ fun PageManageScreen(
                                     onClick = {
                                         sortMenu = false
                                         vm.resetOrder()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("导出这本书") },
+                                    onClick = {
+                                        sortMenu = false
+                                        exportPickFormat = true
                                     }
                                 )
                                 DropdownMenuItem(
@@ -307,6 +352,23 @@ fun PageManageScreen(
                 )
             }
         }
+    }
+
+    if (exportPickFormat) {
+        val currentBook = book
+        ExportFormatDialog(
+            title = currentBook?.title ?: "导出",
+            hasOriginalPdf = currentBook != null && runCatching {
+                (exportCtx.applicationContext as MangaShelfApp).repository.storage
+                    .sourcePdf(currentBook.folder).isFile
+            }.getOrDefault(false),
+            onPick = { fmt ->
+                exportPickFormat = false
+                exportFormat = fmt
+                exportPicker.launch(null)
+            },
+            onDismiss = { exportPickFormat = false }
+        )
     }
 
     if (confirmPurge) {

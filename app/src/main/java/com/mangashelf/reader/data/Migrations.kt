@@ -4,6 +4,58 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
+ * v8 → v9：图片导入工作栏（v1.6.0）。
+ *
+ * 只建两张新表，不动老数据。用独立表而不是给 `books` 加 workspace 字段，
+ * 是为了让两个工作栏在 SQL 层面就互不可见——书架那套查询根本读不到这里。
+ *
+ * 带 DEFAULT 的列与实体上的 `@ColumnInfo(defaultValue=...)` 逐字对应，
+ * 避免迁移后的表结构与 Room 期望的结构对不上（迁移测试会逐字比对）。
+ */
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `image_folders` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `name` TEXT NOT NULL,
+                `parentId` INTEGER NOT NULL DEFAULT 0,
+                `createdAt` INTEGER NOT NULL,
+                `sortMode` TEXT NOT NULL DEFAULT 'TIME',
+                `sortAsc` INTEGER NOT NULL DEFAULT 0
+            )
+            """.trimIndent()
+        )
+        database.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_image_folders_parentId` ON `image_folders` (`parentId`)"
+        )
+
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `image_items` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `folderId` INTEGER NOT NULL DEFAULT 0,
+                `name` TEXT NOT NULL,
+                `relPath` TEXT NOT NULL,
+                `sizeBytes` INTEGER NOT NULL DEFAULT 0,
+                `modifiedAt` INTEGER NOT NULL DEFAULT 0,
+                `width` INTEGER NOT NULL DEFAULT 0,
+                `height` INTEGER NOT NULL DEFAULT 0,
+                `sortIndex` INTEGER NOT NULL DEFAULT 0,
+                `createdAt` INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        database.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_image_items_folderId` ON `image_items` (`folderId`)"
+        )
+        database.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_image_items_folderId_sortIndex` ON `image_items` (`folderId`, `sortIndex`)"
+        )
+    }
+}
+
+/**
  * v7 → v8：新增 `import_batches`（导入批次表，v1.5.6）。
  *
  * 只建新表，不动老表。老版本导入过的记录还留在 `import_tasks` 里、没有对应批次，

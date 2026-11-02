@@ -298,10 +298,14 @@ fun SettingsScreen(
                 )
             }
 
+            // ---------- 权限（v1.6.0）----------
+            item { GroupHeader("权限") }
+            item { PermissionSection() }
+
             // ---------- 关于 ----------
             item { GroupHeader("关于") }
-            item { SettingsRow("版本", "v$versionName（versionCode 21）") {} }
-            item { SettingsRow("数据库", "Room v8 · 无云端同步 · 不联网") {} }
+            item { SettingsRow("版本", "v$versionName（versionCode 22）") {} }
+            item { SettingsRow("数据库", "Room v9 · 无云端同步 · 不联网") {} }
             item {
                 SettingsRow("恢复默认设置", "主题、视图、护眼、手势、排序全部复位") {
                     confirmReset = true

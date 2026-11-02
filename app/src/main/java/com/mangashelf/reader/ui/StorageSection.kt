@@ -56,6 +56,7 @@ private val CATEGORY_COLORS = mapOf(
     "source" to Color(0xFF9B7BFF),
     "pages" to Color(0xFF2E86FF),
     "thumbs" to Color(0xFF3EC5C0),
+    "gallery" to Color(0xFF4CAF50),
     "database" to Color(0xFFF5B800),
     "backup" to Color(0xFFFF7A45),
     "other" to Color(0xFF8A8A99)

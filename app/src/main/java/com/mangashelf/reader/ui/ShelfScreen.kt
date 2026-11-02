@@ -106,6 +106,7 @@ import com.mangashelf.reader.data.Diagnostics
 import com.mangashelf.reader.data.ImportSortPrefs
 import com.mangashelf.reader.data.PageSortMode
 import com.mangashelf.reader.data.SearchHistory
+import com.mangashelf.reader.export.Exporter
 import com.mangashelf.reader.importer.FolderImporter
 import com.mangashelf.reader.ui.theme.ComicScrim
 import com.mangashelf.reader.ui.theme.ThemeMode
@@ -124,6 +125,7 @@ fun ShelfScreen(
     onOpenBook: (Long) -> Unit,
     onManagePages: (Long) -> Unit,
     onOpenBrowser: () -> Unit,
+    onOpenGallery: () -> Unit,
     themeMode: ThemeMode,
     onThemeChange: (ThemeMode) -> Unit
 ) {
@@ -163,6 +165,7 @@ fun ShelfScreen(
     // Android 9 及以下写相册要先要存储权限；等授权时把待保存的参数缓存起来
     var pendingSave by remember { mutableStateOf<Pair<Book, Boolean>?>(null) }
     val saveState by viewModel.saveState.collectAsStateWithLifecycle()
+    val exportState by viewModel.exportState.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
     // 搜索：点放大镜展开输入框，再点关闭收起。收起时清空关键词，书架恢复完整。
     var searchActive by rememberSaveable { mutableStateOf(false) }
@@ -201,6 +204,21 @@ fun ShelfScreen(
     LaunchedEffect(Unit) {
         delay(1200)
         app.markShelfHealthy()
+    }
+
+    // 导出：先选格式，再让用户选目标目录（SAF 每次都要选，避免授权失效和写到看不见的地方）
+    var exportBooks by remember { mutableStateOf<List<Book>>(emptyList()) }
+    var exportFormat by remember { mutableStateOf<Exporter.Format?>(null) }
+    val exportTreePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        val format = exportFormat
+        val targets = exportBooks
+        exportFormat = null
+        exportBooks = emptyList()
+        if (uri != null && format != null && targets.isNotEmpty()) {
+            viewModel.startExport(targets, format, uri)
+        }
     }
 
     // 安全模式下导出诊断包：先在本应用私有目录生成，再让用户选保存位置
@@ -572,6 +590,10 @@ fun ShelfScreen(
                     titleContentColor = MaterialTheme.colorScheme.onBackground
                 ),
                 actions = {
+                    // 工作栏切换：书架 ⇄ 图片，两边的数据完全隔离
+                    TextButton(onClick = onOpenGallery) {
+                        Text("图片", color = MaterialTheme.colorScheme.onBackground)
+                    }
                     IconButton(onClick = { searchPageOpen = true }) {
                         Icon(Icons.Rounded.Search, contentDescription = "搜索")
                     }
@@ -737,6 +759,9 @@ fun ShelfScreen(
                     onTag = {
                         tagText = ""
                         showTagDialog = true
+                    },
+                    onExport = {
+                        exportBooks = books.filter { selection.contains(it.id) }
                     },
                     onDelete = { confirmDeleteSelected = true },
                     onCancel = { viewModel.exitSelectMode() },
@@ -1123,6 +1148,10 @@ fun ShelfScreen(
                 optionsBookId = null
                 onManagePages(optionsBook.id)
             },
+            onExport = {
+                optionsBookId = null
+                exportBooks = listOf(optionsBook)
+            },
             onSaveToGallery = {
                 saveChoiceBookId = optionsBook.id
                 optionsBookId = null
@@ -1132,6 +1161,24 @@ fun ShelfScreen(
                 optionsBookId = null
             }
         )
+    }
+
+    // 导出流程：格式 → 选目录 → 进度 → 结果
+    if (exportBooks.isNotEmpty() && exportFormat == null) {
+        ExportFormatDialog(
+            title = if (exportBooks.size == 1) exportBooks.first().title else "导出 ${exportBooks.size} 本书",
+            hasOriginalPdf = exportBooks.size == 1 && viewModel.hasOriginalPdf(exportBooks.first()),
+            onPick = { format ->
+                exportFormat = format
+                exportTreePicker.launch(null)
+            },
+            onDismiss = { exportBooks = emptyList() }
+        )
+    }
+    when (val ex = exportState) {
+        is ExportState.Running -> ExportProgressDialog(ex.progress) { viewModel.cancelExport() }
+        is ExportState.Finished -> ExportResultDialog(ex.results) { viewModel.dismissExport() }
+        null -> Unit
     }
 
     // 保存到相册：先问范围，避免手滑把几百页塞进相册
@@ -1496,6 +1543,7 @@ private fun BatchActionBar(
     onSelectAll: () -> Unit,
     onSave: () -> Unit,
     onTag: () -> Unit,
+    onExport: () -> Unit,
     onDelete: () -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier
@@ -1520,6 +1568,7 @@ private fun BatchActionBar(
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 TextButton(onClick = onSave, enabled = count > 0) { Text("存封面") }
                 TextButton(onClick = onTag, enabled = count > 0) { Text("打标签") }
+                TextButton(onClick = onExport, enabled = count > 0) { Text("导出") }
                 TextButton(onClick = onDelete, enabled = count > 0) {
                     Text("删除", color = MaterialTheme.colorScheme.error)
                 }
@@ -1613,6 +1662,7 @@ private fun BookOptionsDialog(
     onToggleDirection: () -> Unit,
     onSetReadMode: (String) -> Unit,
     onManagePages: () -> Unit,
+    onExport: () -> Unit,
     onSaveToGallery: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -1698,6 +1748,9 @@ private fun BookOptionsDialog(
                 )
                 TextButton(onClick = onManagePages) {
                     Text("页面管理（排序 / 删除 / 封面）")
+                }
+                TextButton(onClick = onExport) {
+                    Text("导出（PDF / 压缩包 / 长图）")
                 }
                 TextButton(onClick = onSaveToGallery) {
                     Text("保存到相册")

@@ -18,8 +18,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import com.mangashelf.reader.data.EyeScope
+import com.mangashelf.reader.data.GalleryPrefs
 import com.mangashelf.reader.data.SplashPrefs
 import com.mangashelf.reader.ui.FileBrowserScreen
+import com.mangashelf.reader.ui.GalleryScreen
 import com.mangashelf.reader.ui.PageManageScreen
 import com.mangashelf.reader.ui.ReaderScreen
 import com.mangashelf.reader.ui.ShelfScreen
@@ -46,6 +48,12 @@ class MainActivity : ComponentActivity() {
                 var openBookId by rememberSaveable { mutableStateOf(NO_BOOK) }
                 var manageBookId by rememberSaveable { mutableStateOf(NO_BOOK) }
                 var browserOpen by rememberSaveable { mutableStateOf(false) }
+                // v1.6.0：两个工作栏（漫画 / 图片），各自的数据与状态完全独立
+                var workspace by rememberSaveable { mutableStateOf(GalleryPrefs.loadWorkspace(context)) }
+                val switchWorkspace = { next: String ->
+                    workspace = next
+                    GalleryPrefs.saveWorkspace(context, next)
+                }
 
                 // v1.5.9：冷启动开场界面（鲸鱼娘书架）。一次进程只播一次。
                 var showSplash by remember { mutableStateOf(!MangaShelfApp.splashShown) }
@@ -53,6 +61,10 @@ class MainActivity : ComponentActivity() {
 
                 Box(Modifier.fillMaxSize()) {
                 when {
+                    workspace == GalleryPrefs.WORKSPACE_GALLERY -> GalleryScreen(
+                        onBack = { switchWorkspace(GalleryPrefs.WORKSPACE_COMIC) }
+                    )
+
                     browserOpen -> FileBrowserScreen(
                         onBack = { browserOpen = false },
                         onImport = { browserOpen = false }
@@ -77,6 +89,7 @@ class MainActivity : ComponentActivity() {
                                 onOpenBook = { openBookId = it },
                                 onManagePages = { manageBookId = it },
                                 onOpenBrowser = { browserOpen = true },
+                                onOpenGallery = { switchWorkspace(GalleryPrefs.WORKSPACE_GALLERY) },
                                 themeMode = themeMode,
                                 onThemeChange = { mode ->
                                     themeMode = mode
