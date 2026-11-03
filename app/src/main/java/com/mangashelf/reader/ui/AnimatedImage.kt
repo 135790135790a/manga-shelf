@@ -1,6 +1,7 @@
 package com.mangashelf.reader.ui
 
 import android.graphics.drawable.Drawable
+import android.os.Build
 import android.view.ViewGroup
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
@@ -88,7 +89,13 @@ fun AnimatedImage(
                 val ctx = LocalContext.current
                 val loader = remember(ctx) {
                     ImageLoader.Builder(ctx)
-                        .components { add(GifDecoder.Factory()); add(ImageDecoderDecoder.Factory()) }
+                        .components {
+                            add(GifDecoder.Factory())
+                            // ImageDecoder 解码器需要 API 28，低版本只用 GifDecoder
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                                add(ImageDecoderDecoder.Factory())
+                            }
+                        }
                         .build()
                 }
                 AsyncImage(
