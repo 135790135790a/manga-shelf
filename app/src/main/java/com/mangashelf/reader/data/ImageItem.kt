@@ -44,8 +44,23 @@ data class ImageItem(
     /** 手动排序位置，越小越靠前；新建时取当前最大值 + 1 */
     @ColumnInfo(defaultValue = "0")
     val sortIndex: Int = 0,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    // ---------- v1.6.1 动图元数据 ----------
+    /** 实际 mime（按文件内容嗅探，不信任扩展名），例如 image/gif、video/mp4 */
+    @ColumnInfo(defaultValue = "")
+    val mimeType: String = "",
+    /** 动图类型，取值见 [AnimationKind]；静态图为 STATIC */
+    @ColumnInfo(defaultValue = "STATIC")
+    val kind: String = AnimationKind.STATIC.name,
+    /** 帧数；不知道时为 0 */
+    @ColumnInfo(defaultValue = "0")
+    val frames: Int = 0,
+    /** 总时长毫秒；不知道时为 0（UI 只在 > 0 时显示） */
+    @ColumnInfo(defaultValue = "0")
+    val durationMs: Int = 0
 ) {
+    /** 是否动图（列表里仍只显示首帧） */
+    val isAnimated: Boolean get() = kind != AnimationKind.STATIC.name
     companion object {
         const val ROOT = 0L
     }

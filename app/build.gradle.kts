@@ -34,8 +34,8 @@ android {
         applicationId = "com.mangashelf.reader"
         minSdk = 24
         targetSdk = 34
-        versionCode = 22
-        versionName = "1.6.0"
+    versionCode = 23
+    versionName = "1.6.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -116,6 +116,13 @@ dependencies {
 
     // 漫画页面的磁盘图片加载与内存缓存
     implementation("io.coil-kt:coil-compose:2.6.0")
+
+    // v1.6.1 动图：GIF / 动图 WebP / APNG（API 28+ 走 ImageDecoder，27 及以下退静态首帧）
+    implementation("io.coil-kt:coil-gif:2.6.0")
+    // v1.6.1 动图：Lottie JSON 渲染
+    implementation("com.airbnb.android:lottie-compose:6.4.0")
+    // v1.6.1 动图：SVGA（仅 JitPack 有，坐标是大写仓库名）
+    implementation("com.github.svga:SVGAPlayer-Android:2.6.1")
 
     // 读取图片的 EXIF 旋转信息
     implementation("androidx.exifinterface:exifinterface:1.3.7")

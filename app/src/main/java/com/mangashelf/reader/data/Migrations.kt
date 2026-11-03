@@ -12,6 +12,24 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * 带 DEFAULT 的列与实体上的 `@ColumnInfo(defaultValue=...)` 逐字对应，
  * 避免迁移后的表结构与 Room 期望的结构对不上（迁移测试会逐字比对）。
  */
+/**
+ * v9 → v10（v1.6.1）：图片工作栏支持动图。
+ *
+ * 四列都带 DEFAULT，与 [ImageItem] 上的 `@ColumnInfo(defaultValue = ...)` 对齐，
+ * 这样 ALTER 之后的表结构与 Room 期望的建表语句逐字一致，打开数据库时不会触发
+ * 「Migration didn't properly handle」。
+ *
+ * 老数据的 kind 落在 STATIC，表现与升级前完全一样。
+ */
+val MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE `image_items` ADD COLUMN `mimeType` TEXT NOT NULL DEFAULT ''")
+        database.execSQL("ALTER TABLE `image_items` ADD COLUMN `kind` TEXT NOT NULL DEFAULT 'STATIC'")
+        database.execSQL("ALTER TABLE `image_items` ADD COLUMN `frames` INTEGER NOT NULL DEFAULT 0")
+        database.execSQL("ALTER TABLE `image_items` ADD COLUMN `durationMs` INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 val MIGRATION_8_9 = object : Migration(8, 9) {
     override fun migrate(database: SupportSQLiteDatabase) {
         database.execSQL(

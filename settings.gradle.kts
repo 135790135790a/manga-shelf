@@ -25,6 +25,8 @@ dependencyResolutionManagement {
         }
         google()
         mavenCentral()
+        // v1.6.1：SVGA 播放器只在 JitPack 上，阿里云与官方仓库都没有
+        maven("https://jitpack.io")
     }
 }
 

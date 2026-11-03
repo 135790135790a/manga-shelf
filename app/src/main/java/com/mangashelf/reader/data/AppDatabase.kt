@@ -8,7 +8,7 @@ import androidx.room.RoomDatabase
 @Database(
     entities = [Book::class, PageEntry::class, ImportTask::class, ImportBatch::class,
                 ImageFolder::class, ImageItem::class],
-    version = 9,
+    version = 10,
     // 打开 schema 导出：schemas/ 下的 JSON 是以后写迁移与迁移测试的唯一依据
     exportSchema = true
 )
@@ -44,7 +44,8 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_5_6,
                     MIGRATION_6_7,
                     MIGRATION_7_8,
-                    MIGRATION_8_9
+                    MIGRATION_8_9,
+                    MIGRATION_9_10
                 )
                 .build()
                 .also { instance = it }

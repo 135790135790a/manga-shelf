@@ -1,3 +1,36 @@
+## v1.6.1 — 2026-11-03
+
+### 新增
+
+- **图片预览页**：`ui/ImagePreviewScreen.kt`。点缩略图进全屏，`HorizontalPager` 左右翻页，双指缩放 1×–4×，双击 1×↔2.5×，缩放态禁翻页；顶部返回 + 页码 + 动图类型标签，底部文件名 / 尺寸 / 大小 / 时长；返回保持原位置。
+- **长按菜单**：存到相册（`Pictures/MangaShelf`）、重命名、移动到、删除；多选栏新增「相册」，批量写入并汇报成功数。
+- **批量导入**：相册走 `PickMultipleVisualMedia(50)`，文件走 `OpenMultipleDocuments`，两个入口都先弹确认框（张数 + `OpenableColumns.SIZE` 预估大小），导入过程可取消，已完成的保留。
+- **拖拽归档**：网格视图长按图片开始拖动，目标文件夹高亮描边，松手移动；拖到空白处松手则弹出长按菜单。
+- **新建文件夹入口**：从「视图」下拉菜单提到顶栏 `+ 文件夹`，解决「找不到新建文件夹」。
+- **六类动图**：GIF / 动图 WebP / APNG / Ugoira / Lottie / SVGA。`data/AnimationSniffer.kt` 按**文件内容**判型（不只看扩展名），`ui/AnimatedImage.kt` 统一渲染，列表只出首帧并带播放角标，预览才播放，离开页面在 `DisposableEffect` 释放。
+
+### 数据
+
+- `image_items` 新增 4 列：`mimeType` / `kind` / `frames` / `durationMs`，`MIGRATION_9_10` 四条 `ALTER TABLE`（均带 `DEFAULT`，与 `@ColumnInfo(defaultValue)` 对齐）。
+- 数据库版本 9 → **10**。
+- Ugoira 解包目录：`files/gallery/ugoira/<uuid>/`。
+
+### 依赖
+
+- `io.coil-kt:coil-gif:2.6.0`（GIF / APNG / 动图 WebP）
+- `com.airbnb.android:lottie-compose:6.4.0`
+- `com.github.svga:SVGAPlayer-Android:2.6.1`（JitPack，`settings.gradle.kts` 新增 `maven("https://jitpack.io")`）
+
+### 变更
+
+- `versionName` → 1.6.1，`versionCode` → 23。
+- 导出 ZIP 含动图时保留原始文件；导出 PDF / 长图时取首帧。
+
+### 已验证 / 未验证
+
+- 已验证：`assembleRelease` 通过、单测 4/4、`verify-release.ps1` 七项通过、schema 10 与迁移 SQL 逐字一致。
+- 未验证：真机（`adb devices` 为空）、500+ 张压测、Lottie/SVGA 实际渲染效果。
+
 ## v1.6.0 — 2026-11-02
 
 ### 新增

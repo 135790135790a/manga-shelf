@@ -20,12 +20,26 @@ class GalleryStorage(context: Context) {
 
     private val thumbsRoot: File = File(root, "thumbs")
 
-    /** 给新导入的图片分配文件名（扩展名沿用原图） */
+    /** 给新导入的图片分配文件名（扩展名沿用原图）。v1.6.1 起也收动图与动画文件。 */
     fun newRelPath(originalName: String): String {
         val ext = originalName.substringAfterLast('.', "jpg").lowercase(Locale.US)
-            .let { if (it in setOf("jpg", "jpeg", "png", "webp", "bmp", "gif", "heic", "heif")) it else "jpg" }
         val base = UUID.randomUUID().toString().replace("-", "").take(16)
-        return "$base.$ext"
+        val safeExt = if (ext in ALLOWED_EXT) ext else {
+            // 没有扩展名或扩展名离谱（比如是查询串）时统一落 jpg；其余原样保留，避免改坏动图
+            if (ext.isEmpty() || ext.length > 8) "jpg" else ext
+        }
+        return "$base.$safeExt"
+    }
+
+    /** 解包后的 Ugoira 帧目录：`files/gallery/ugoira/<uuid>/` */
+    fun ugoiraDir(uuid: String): File = File(File(root, "ugoira"), uuid)
+
+    companion object {
+        /** 常见的静态图与动图；不在名单里的扩展名原样保留，避免把 .json/.lottie 之类的动图改坏 */
+        private val ALLOWED_EXT = setOf(
+            "jpg", "jpeg", "png", "webp", "bmp", "gif", "heic", "heif",
+            "apng", "ugoira", "lottie", "svga", "json"
+        )
     }
 
     fun fileOf(relPath: String): File {
