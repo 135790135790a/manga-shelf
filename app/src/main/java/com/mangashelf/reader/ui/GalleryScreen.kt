@@ -3,6 +3,7 @@ package com.mangashelf.reader.ui
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -105,6 +106,7 @@ fun GalleryScreen(
     var showViewMenu by remember { mutableStateOf(false) }
     var showNewFolder by remember { mutableStateOf(false) }
     var showImportSheet by remember { mutableStateOf(false) }
+    var albumOpen by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<ImageFolder?>(null) }
     var deleteFolderTarget by remember { mutableStateOf<ImageFolder?>(null) }
     var menuFolder by remember { mutableStateOf<ImageFolder?>(null) }
@@ -161,6 +163,16 @@ fun GalleryScreen(
         if (uris.isNotEmpty()) pendingImport = uris
     }
 
+    // 系统返回键：在子文件夹里先回上级，到根才退出工作栏
+    BackHandler(enabled = crumbs.size > 1) {
+        if (selectMode) {
+            selectMode = false
+            selected = emptySet()
+        } else {
+            vm.goUp()
+        }
+    }
+
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -185,17 +197,25 @@ fun GalleryScreen(
                     }
                 },
                 navigationIcon = {
+                    val inSubFolder = crumbs.size > 1
                     IconButton(onClick = {
-                        if (selectMode) {
-                            selectMode = false
-                            selected = emptySet()
-                        } else {
-                            onBack()
+                        when {
+                            selectMode -> {
+                                selectMode = false
+                                selected = emptySet()
+                            }
+                            // 在子文件夹里：返回上一级（v1.6.2 修：原来这里直接退出了整个工作栏）
+                            inSubFolder -> vm.goUp()
+                            else -> onBack()
                         }
                     }) {
                         Icon(
                             imageVector = if (selectMode) Icons.Filled.Clear else Icons.Filled.ArrowBack,
-                            contentDescription = if (selectMode) "退出多选" else "返回"
+                            contentDescription = when {
+                                selectMode -> "退出多选"
+                                inSubFolder -> "返回上一级"
+                                else -> "返回"
+                            }
                         )
                     }
                 },
@@ -332,9 +352,6 @@ fun GalleryScreen(
                                         if (selectMode) selected = selected.toggle(image.id)
                                         else previewIndex = images.indexOf(image)
                                     },
-                                    onLongClick = {
-                                        if (selectMode) selected = selected.toggle(image.id) else menuItem = image
-                                    },
                                     modifier = Modifier.onGloballyPositioned {
                                         itemRects[image.id] = it.boundsInRoot()
                                     },
@@ -349,11 +366,19 @@ fun GalleryScreen(
                                     },
                                     onDragEnd = { moved ->
                                         val target = if (moved) hoverFolder else null
-                                        if (target != null) {
-                                            vm.moveItems(listOf(image.id), target.id)
-                                            Toast.makeText(ctx, "已移动到「${target.name}」", Toast.LENGTH_SHORT).show()
-                                        } else if (!moved) {
-                                            menuItem = image
+                                        when {
+                                            // 拖到文件夹上松手：只移动，不弹菜单、不开预览
+                                            target != null -> {
+                                                vm.moveItems(listOf(image.id), target.id)
+                                                Toast.makeText(ctx, "已移动到「${target.name}」", Toast.LENGTH_SHORT).show()
+                                            }
+                                            // 长按没动就松手：进多选或弹菜单
+                                            !moved -> {
+                                                if (selectMode) selected = selected.toggle(image.id)
+                                                else menuItem = image
+                                            }
+                                            // 长按拖到空白处：什么都不做
+                                            else -> Unit
                                         }
                                         dragItem = null
                                         hoverFolder = null
@@ -441,12 +466,24 @@ fun GalleryScreen(
         AlertDialog(
             onDismissRequest = { showImportSheet = false },
             title = { Text("导入图片") },
-            text = { Text("从相册选不申请任何权限；也可以从文件里选。导入后会在本 App 私有目录留一份副本。") },
+            text = {
+                Text(
+                    "「快速从相册选」用系统相册，不申请任何权限；" +
+                        "「按相簿浏览」会读取手机里的真实相簿（微信/QQ/相机等），需要相册权限。" +
+                        "导入后会在本 App 私有目录留一份副本。"
+                )
+            },
             confirmButton = {
-                TextButton(onClick = {
-                    showImportSheet = false
-                    photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                }) { Text("从相册选") }
+                Row {
+                    TextButton(onClick = {
+                        showImportSheet = false
+                        photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    }) { Text("快速从相册选") }
+                    TextButton(onClick = {
+                        showImportSheet = false
+                        albumOpen = true
+                    }) { Text("按相簿浏览") }
+                }
             },
             dismissButton = {
                 Row {
@@ -457,6 +494,16 @@ fun GalleryScreen(
                     }) { Text("从文件选") }
                 }
             }
+        )
+    }
+
+    if (albumOpen) {
+        AlbumPickerScreen(
+            onPick = { uris ->
+                albumOpen = false
+                if (uris.isNotEmpty()) pendingImport = uris
+            },
+            onBack = { albumOpen = false }
         )
     }
 
@@ -516,10 +563,12 @@ fun GalleryScreen(
     }
 
     menuItem?.let { item ->
+        // v1.6.2：菜单只放动作，不再显示文件名与尺寸。
+        // 详情统一放在预览页底部的信息条里，避免"长按=详情"和"长按=拖拽"抢同一个手势。
         AlertDialog(
             onDismissRequest = { menuItem = null },
-            title = { Text(item.name) },
-            text = { Text("${item.width} × ${item.height} · ${gallerySize(item.sizeBytes)}") },
+            title = { Text("图片操作") },
+            text = { Text("这一张该怎么处理？") },
             confirmButton = {
                 Row {
                     TextButton(onClick = {
@@ -575,7 +624,8 @@ fun GalleryScreen(
             initialIndex = index,
             fileOf = { vm.fileOf(it) },
             ugoiraFramesOf = { vm.ugoiraFramesOf(it) },
-            onClose = { previewIndex = null }
+            onClose = { previewIndex = null },
+            folderNames = folders.associate { it.id to it.name }
         )
     }
 
@@ -663,11 +713,10 @@ private fun FolderTile(
 private fun ImageTile(
     file: File,
     item: ImageItem,
-    frames: List<File>,
+    frames: List<com.mangashelf.reader.data.UgoiraFrame>,
     selected: Boolean,
     dragging: Boolean,
     onClick: () -> Unit,
-    onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
     onDragStart: (Offset) -> Unit = {},
     onDrag: (Offset) -> Unit = {},
@@ -682,7 +731,9 @@ private fun ImageTile(
                 else MaterialTheme.colorScheme.surfaceVariant
             )
             .then(if (dragging) Modifier.alpha(0.45f) else Modifier)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            // 长按在这里是空操作：真正处理长按的是下面的 detectDragGesturesAfterLongPress。
+            // combinedClickable 只负责「短按=预览」并抑制长按后误触发 onClick。
+            .combinedClickable(onClick = onClick, onLongClick = {})
             .pointerInput(item.id) {
                 var total = Offset.Zero
                 detectDragGesturesAfterLongPress(
@@ -692,7 +743,7 @@ private fun ImageTile(
                         total += amount
                         onDrag(amount)
                     },
-                    onDragEnd = { onDragEnd(total.getDistance() > 12f) },
+                    onDragEnd = { onDragEnd(total.getDistance() > viewConfiguration.touchSlop) },
                     onDragCancel = { onDragEnd(false) }
                 )
             }
@@ -747,7 +798,7 @@ private fun FolderRow(name: String, onClick: () -> Unit, onLongClick: () -> Unit
 private fun ImageRow(
     file: File,
     item: ImageItem,
-    frames: List<File>,
+    frames: List<com.mangashelf.reader.data.UgoiraFrame>,
     selected: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit

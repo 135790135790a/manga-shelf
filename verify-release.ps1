@@ -136,7 +136,8 @@ $permWhitelist = @(
     'android.permission.FOREGROUND_SERVICE_DATA_SYNC',
     'android.permission.POST_NOTIFICATIONS',
     'android.permission.WRITE_EXTERNAL_STORAGE',
-    'android.permission.READ_EXTERNAL_STORAGE'
+    'android.permission.READ_EXTERNAL_STORAGE',
+  'android.permission.READ_MEDIA_IMAGES'
 )
 # 注意：带 maxSdkVersion 的权限在 badging 里是
 #   uses-permission: name='...' maxSdkVersion='28'

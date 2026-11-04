@@ -45,6 +45,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import com.mangashelf.reader.data.ImageItem
+import com.mangashelf.reader.data.UgoiraFrame
 import java.io.File
 
 /**
@@ -62,8 +63,10 @@ fun ImagePreviewScreen(
     items: List<ImageItem>,
     initialIndex: Int,
     fileOf: (ImageItem) -> File,
-    ugoiraFramesOf: (ImageItem) -> List<File>,
-    onClose: () -> Unit
+    ugoiraFramesOf: (ImageItem) -> List<UgoiraFrame>,
+    onClose: () -> Unit,
+    /** 文件夹 id → 名称，用于底部信息条显示「所属文件夹」。 */
+    folderNames: Map<Long, String> = emptyMap()
 ) {
     if (items.isEmpty()) {
         onClose()
@@ -144,13 +147,25 @@ fun ImagePreviewScreen(
                         maxLines = 2
                     )
                     Text(
-                        text = buildString {
-                            if (current.width > 0 && current.height > 0) append("${current.width} × ${current.height} · ")
-                            append(humanBytes(current.sizeBytes))
+                        text = current.kindLabel() + buildString {
+                            if (current.width > 0 && current.height > 0) append(" · ${current.width} × ${current.height}")
+                            append(" · ${humanBytes(current.sizeBytes)}")
+                            if (current.frames > 0) append(" · ${current.frames} 帧")
                             if (current.durationMs > 0) append(" · ${current.durationMs / 1000.0}s")
                         },
                         color = Color.White.copy(alpha = 0.65f),
                         style = MaterialTheme.typography.labelSmall
+                    )
+                    // v1.6.2：详情统一放这里（长按菜单只留动作，不再兼做详情卡）
+                    Text(
+                        text = buildString {
+                            val folder = folderNames[current.folderId]
+                            append("导入于 ${formatTime(current.createdAt)}")
+                            if (!folder.isNullOrBlank()) append(" · 位于「$folder」")
+                        },
+                        color = Color.White.copy(alpha = 0.55f),
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(top = 2.dp)
                     )
                 }
             }
@@ -162,11 +177,19 @@ private fun ImageItem.kindLabel(): String = runCatching {
     com.mangashelf.reader.data.AnimationKind.fromName(kind).label
 }.getOrDefault("")
 
+private fun formatTime(ms: Long): String {
+    if (ms <= 0) return "未知时间"
+    return runCatching {
+        java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.CHINA)
+            .format(java.util.Date(ms))
+    }.getOrDefault("未知时间")
+}
+
 @Composable
 private fun ZoomablePage(
     item: ImageItem,
     file: File,
-    frames: List<File>,
+    frames: List<UgoiraFrame>,
     active: Boolean,
     onZoomChange: (Boolean) -> Unit,
     onTap: () -> Unit

@@ -40,6 +40,7 @@ import com.airbnb.lottie.compose.rememberLottieComposition
 import com.mangashelf.reader.data.AnimationKind
 import com.mangashelf.reader.data.GalleryStorage
 import com.mangashelf.reader.data.ImageItem
+import com.mangashelf.reader.data.UgoiraFrame
 import com.opensource.svgaplayer.SVGAImageView
 import com.opensource.svgaplayer.SVGAParser
 import com.opensource.svgaplayer.SVGAVideoEntity
@@ -47,6 +48,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
+
+/**
+ * Ugoira 超过这么多帧就按 30fps 降采样。
+ * 1000 帧的 Ugoira 在手机上按原延时播放很容易掉帧，降到 30fps 观感几乎无差别。
+ */
+private const val UGOIRA_MAX_FPS_FRAMES = 500
 
 /**
  * 统一的图片/动图渲染入口。
@@ -66,8 +73,8 @@ fun AnimatedImage(
     playing: Boolean,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Fit,
-    /** Ugoira 专用：已解包的帧文件列表（由调用方从 ViewModel/GalleryStorage 提供）。 */
-    ugoiraFrames: List<File> = emptyList()
+    /** Ugoira 专用：已解包的帧（含每帧真实延时），由调用方从 ViewModel 提供。 */
+    ugoiraFrames: List<UgoiraFrame> = emptyList()
 ) {
     val kind = remember(item?.id, item?.kind) {
         item?.kind?.let { AnimationKind.fromName(it) } ?: AnimationKind.STATIC
@@ -140,24 +147,30 @@ fun AnimatedImage(
         }
 
         AnimationKind.UGOIRA -> {
-            val frames = ugoiraFrames
-            val delays = remember(item?.id, item?.durationMs, frames.size) {
-                val n = frames.size.coerceAtLeast(1)
-                val total = item?.durationMs ?: 0
-                if (total > 0) (total / n).coerceAtLeast(30) else 100
-            }
-            var index by remember(frames) { mutableIntStateOf(0) }
-            LaunchedEffect(frames, playing) {
-                if (!playing || frames.size <= 1) return@LaunchedEffect
-                while (true) {
-                    delay(delays.toLong())
-                    index = (index + 1) % frames.size
+            // v1.6.2：按 frames.json 里的逐帧真实延时播放（不再用「总时长 ÷ 帧数」平均），
+            // 帧数超过 [UGOIRA_MAX_FPS_FRAMES] 时按 30fps 降采样，避免手机端追不上时间轴。
+            val all = ugoiraFrames
+            val sampled = remember(all) {
+                if (all.size <= UGOIRA_MAX_FPS_FRAMES) all
+                else {
+                    // 保留首尾，中间等间隔抽取，保证总时长不变
+                    val step = (all.size + UGOIRA_MAX_FPS_FRAMES - 1) / UGOIRA_MAX_FPS_FRAMES
+                    all.filterIndexed { i, _ -> i % step == 0 }.ifEmpty { listOf(all.first()) }
                 }
             }
-            val current = frames.getOrNull(index)
+            var index by remember(sampled) { mutableIntStateOf(0) }
+            LaunchedEffect(sampled, playing) {
+                if (!playing || sampled.size <= 1) return@LaunchedEffect
+                while (true) {
+                    val frame = sampled[index]
+                    delay(frame.delayMs.coerceIn(10, 10_000).toLong())
+                    index = (index + 1) % sampled.size
+                }
+            }
+            val current = sampled.getOrNull(index)
             if (current != null) {
                 AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current).data(current).build(),
+                    model = ImageRequest.Builder(LocalContext.current).data(current.file).build(),
                     contentDescription = null,
                     modifier = modifier,
                     contentScale = contentScale

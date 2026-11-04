@@ -76,9 +76,47 @@ object UgoiraParser {
                     seq++
                 }
             }
+            // 逐帧延时写盘：v1.6.2 起播放按真实延时走，不再用「总时长 ÷ 帧数」平均
+            if (frames.isNotEmpty()) saveManifest(destDir, frames)
             return frames
         }
     }
+
+    private const val MANIFEST = "frames.json"
+
+    /** 把帧名与延时写成 `frames.json`，播放与统计都读它。 */
+    fun saveManifest(destDir: File, frames: List<UgoiraFrame>): Boolean = runCatching {
+        val arr = org.json.JSONArray()
+        frames.forEach { f ->
+            arr.put(
+                org.json.JSONObject()
+                    .put("file", f.file.name)
+                    .put("delay", f.delayMs)
+            )
+        }
+        File(destDir, MANIFEST).writeText(arr.toString(), Charsets.UTF_8)
+        true
+    }.getOrDefault(false)
+
+    /**
+     * 读回 `frames.json`。返回 null 表示没有清单（老数据），
+     * 调用方退化为「按文件名排序 + 默认延时」。
+     */
+    fun loadManifest(destDir: File): List<UgoiraFrame>? = runCatching {
+        val f = File(destDir, MANIFEST)
+        if (!f.isFile) return null
+        val arr = org.json.JSONArray(f.readText(Charsets.UTF_8))
+        val out = ArrayList<UgoiraFrame>(arr.length())
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            val name = o.optString("file")
+            if (name.isEmpty()) continue
+            val file = File(destDir, name)
+            if (!file.isFile) continue
+            out += UgoiraFrame(file, o.optInt("delay", DEFAULT_DELAY).coerceIn(10, 10_000))
+        }
+        out
+    }.getOrNull()?.takeIf { it.isNotEmpty() }
 
     private fun String.isFrameImage(): Boolean {
         if (startsWith("__MACOSX/") || contains("/.")) return false

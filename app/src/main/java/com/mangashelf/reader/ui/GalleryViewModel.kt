@@ -18,6 +18,7 @@ import com.mangashelf.reader.data.GallerySort
 import com.mangashelf.reader.data.GalleryStorage
 import com.mangashelf.reader.data.ImageFolder
 import com.mangashelf.reader.data.ImageItem
+import com.mangashelf.reader.data.UgoiraFrame
 import com.mangashelf.reader.data.ImportBatch
 import com.mangashelf.reader.data.UgoiraParser
 import kotlinx.coroutines.Dispatchers
@@ -386,12 +387,17 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     fun fileOf(item: ImageItem): File = storage.fileOf(item.relPath)
 
-    /** Ugoira 的帧文件（列表/预览共用）。非 Ugoira 返回空列表。 */
-    fun ugoiraFramesOf(item: ImageItem): List<File> {
+    /** Ugoira 的帧（含每帧真实延时）。非 Ugoira 返回空列表。 */
+    fun ugoiraFramesOf(item: ImageItem): List<UgoiraFrame> {
         if (item.kind != AnimationKind.UGOIRA.name) return emptyList()
         val uuid = item.relPath.substringBeforeLast('.')
         return runCatching {
-            storage.ugoiraDir(uuid).listFiles()?.filter { it.isFile }?.sortedBy { it.name }
+            val dir = storage.ugoiraDir(uuid)
+            // v1.6.2：优先读 frames.json；老数据（v1.6.1 解的包）没清单，按文件名排序 + 默认延时兜底
+            UgoiraParser.loadManifest(dir) ?: dir.listFiles()
+                ?.filter { it.isFile && it.name != "frames.json" }
+                ?.sortedBy { it.name }
+                ?.map { UgoiraFrame(it, 100) }
                 ?: emptyList()
         }.getOrDefault(emptyList())
     }

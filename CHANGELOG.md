@@ -1,3 +1,32 @@
+## v1.6.2 — 2026-11-04
+
+> 只动图片工作栏，漫画书架 / 阅读器 / 导入 / 导出 / 页面管理零改动。
+
+### 修复
+
+- **长按移动误弹详情**：`ImageTile` 原来是 `combinedClickable(onLongClick)` 与 `detectDragGesturesAfterLongPress` 抢同一个 500ms 判定，菜单先弹出、拖拽被 Dialog 吞掉后又经 `onDragEnd(false)` 再弹一次。现在长按只由拖拽检测器处理，`combinedClickable` 的 `onLongClick` 置空；详情从菜单里移除，改到预览页底部信息条。拖动阈值改用 `viewConfiguration.touchSlop`。
+- **文件夹没有返回上一级**：`navigationIcon` 原来无论哪层都退出整个工作栏。现在三分支（多选 / 子目录回上级 / 根目录退出），并补 `BackHandler`。
+- **相册只显示相机/截图/下载**：原来走系统 Photo Picker，分类由系统决定。新增 `data/AlbumRepository.kt` + `ui/AlbumPickerScreen.kt`，按 `MediaStore.BUCKET_ID` 列真实相簿（封面 + 张数 + 分页），权限按需申请。
+- **Ugoira 变 WebP 且不动**：存储层本来就没转码，问题是列表直接展示帧文件、播放延时用「总时长÷帧数」平均、单帧时不播。现在解包写 `frames.json` 记每帧延时，按真实延时播放，>500 帧降采样 30fps，类型保持 Ugoira。
+
+### 新增
+
+- `data/AlbumRepository.kt`、`ui/AlbumPickerScreen.kt`
+- `UgoiraParser.saveManifest` / `loadManifest`（`frames.json`）
+- 预览页底部信息条：格式 / 尺寸 / 大小 / 帧数 / 时长 / 导入时间 / 所属文件夹
+
+### 权限
+
+- 新增 `READ_MEDIA_IMAGES`（Android 13+）与 `READ_EXTERNAL_STORAGE`（`maxSdkVersion=32`），**只在进入「按相簿浏览」时申请**；`verify-release.ps1` 白名单同步。
+
+### 数据库
+
+- 无变化（仍 version 10，无新列）；`frames.json` 是新增文件，老数据自动走兜底逻辑，不需要迁移。
+
+### 产物
+
+- APK 9,939,150 字节（9.48 MB），SHA-256 `A4554E09DB3C8699E6F721EC52D4CBACD53C427675ED7D8A8D604F1A73543DAD`
+
 ## v1.6.1 — 2026-11-03
 
 ### 新增
