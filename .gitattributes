@@ -1,3 +1,7 @@
+# git 换行符规范（v1.6.2 统一）
+# 规则顺序：后面的覆盖前面的，所以先写通配、再写特例。
+* text=auto eol=lf
+
 # Windows 批处理必须是 CRLF，否则 goto/代码块会乱（v1.0 踩过这个坑）
 *.bat text eol=crlf
 *.cmd text eol=crlf
@@ -6,8 +10,14 @@
 gradlew text eol=lf
 *.sh text eol=lf
 
-# 二进制
+# 二进制（不参与换行符转换）
 *.png binary
 *.ico binary
 *.apk binary
 *.jar binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.jks binary
+*.keystore binary
