@@ -6,7 +6,7 @@
 
 | | |
 | :-- | :-- |
-| **最新版本** | v1.6.3（versionCode 25） |
+| **最新版本** | v1.6.4（versionCode 26） |
 | **安装包** | 9.50 MB · 直接覆盖安装，数据不丢 |
 | **系统要求** | Android 7.0+（minSdk 24），targetSdk 34 |
 | **技术栈** | Kotlin · Jetpack Compose (Material 3) · Room · Coil · PdfRenderer |
@@ -21,6 +21,13 @@
 ---
 
 ## 1. 功能清单
+
+### WebP 动图判型修复（v1.6.4）
+
+| 问题 | 修复 |
+| :-- | :-- |
+| WebP 动图导入后显示「静态图」且预览不播 | `AnimationSniffer.webpAnimFrames` 原来把 WebP `ANIM` 块里的「循环次数」当成了帧数（循环次数通常是 0 = 无限循环），于是全部判成静态。现在按标准数 `ANMF` 块 |
+| 已经导入的旧记录不会自己变好 | 启动时做一次性的类型修正：扫 `kind='STATIC'` 的记录重新嗅探，发现是动图就回写 `kind/frames/durationMs` 并刷新列表，只跑一次 |
 
 ### 相簿 / 动图 / 后台导入修复（v1.6.3 新增）
 
@@ -321,7 +328,7 @@ adb install -r app\build\outputs\apk\release\app-release.apk
 
 ### 路 A：装 APK（已编译好，推荐）
 
-**`漫画书架-v1.6.3.apk`（约 9.50 MB）就在这个目录里**，直接装：
+**`漫画书架-v1.6.4.apk`（约 9.50 MB）就在这个目录里**，直接装：
 
 1. 手机「设置 → 安全」里允许安装未知来源应用（不同品牌位置略有差异，按提示授权即可）
 2. 把 APK 传到手机（数据线 / 微信文件传输 / QQ / 网盘都行）
