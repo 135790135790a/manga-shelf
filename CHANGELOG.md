@@ -1,18 +1,3 @@
-## v1.6.4 — 2026-11-05
-
-### 修复
-
-- **WebP 动图被判成静态图**：`AnimationSniffer.webpAnimFrames` 一直在 `ANIM` 块里读帧数，但 WebP 的 `ANIM` 块结构是「背景色 4 字节 + 循环次数 2 字节」——**没有帧数字段**，而循环次数通常写 0（无限循环），于是读出来永远是 0，所有 WebP 动图都落进 `STATIC` 分支，预览页自然不动。现在改为按标准统计 `ANMF` 块个数（每帧一个），并用 `seek` 而不是 `skipBytes` 跳块，避免靠近文件末尾时少跳。
-- **存量数据不会自动变好**：`GalleryViewModel.repairKindsOnce()` 在首次进入图片工作栏时扫一遍 `kind='STATIC'` 的记录，重新嗅探，凡是动图就回写 `kind / frames / durationMs` 并刷新，只执行一次（prefs 打标记），完成后提示「已修正 N 张动图的类型」。
-
-### 数据库
-
-- 无结构变化（仍 version 10），只回写已有行的 `kind/frames/durationMs`。
-
-### 产物
-
-- APK 9960206 字节（9.50 MB），SHA-256 `AF075302D46A97EB60D35D805F3F40F238834C7972CA6058EEBE1ED15D7234DA`
-
 ## v1.6.3 — 2026-11-05
 
 > 只动图片工作栏与相册读取；漫画书架 / 阅读器 / 漫画导入导出 / 页面管理零改动（`git diff` 已验证）。
@@ -35,6 +20,21 @@
 ### 产物
 
 - APK 9957662 字节（9.50 MB），SHA-256 `3CB24D3205C0955955984E6007722DDFAF9E11F34AB3E51BAD28FE529252E37F`
+
+### 追加修复 — 2026-11-05（versionCode 26）
+
+### 修复
+
+- **WebP 动图被判成静态图**：`AnimationSniffer.webpAnimFrames` 一直在 `ANIM` 块里读帧数，但 WebP 的 `ANIM` 块结构是「背景色 4 字节 + 循环次数 2 字节」——**没有帧数字段**，而循环次数通常写 0（无限循环），于是读出来永远是 0，所有 WebP 动图都落进 `STATIC` 分支，预览页自然不动。现在改为按标准统计 `ANMF` 块个数（每帧一个），并用 `seek` 而不是 `skipBytes` 跳块，避免靠近文件末尾时少跳。
+- **存量数据不会自动变好**：`GalleryViewModel.repairKindsOnce()` 在首次进入图片工作栏时扫一遍 `kind='STATIC'` 的记录，重新嗅探，凡是动图就回写 `kind / frames / durationMs` 并刷新，只执行一次（prefs 打标记），完成后提示「已修正 N 张动图的类型」。
+
+### 数据库
+
+- 无结构变化（仍 version 10），只回写已有行的 `kind/frames/durationMs`。
+
+### 产物
+
+- APK 9,960,206 字节（9.50 MB），SHA-256 `1AF8E84D62E98B2E0EF0A6C9731168F4DB825C98E1EDC0828BF31F8CCA06A465`
 
 ## v1.6.2 — 2026-11-04
 

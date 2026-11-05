@@ -190,28 +190,30 @@ object AnimationSniffer {
 
     // ---------------- WebP ----------------
 
+    /**
+     * WebP 动图的帧数 = `ANMF` 块的个数。
+     *
+     * 注意：`ANIM` 块里**没有帧数字段**，它只有「背景色 4 字节 + 循环次数 2 字节」，
+     * 循环次数通常写成 0（表示无限循环）。v1.6.3 之前把那个 0 当成帧数，
+     * 于是所有 WebP 动图都被判成「静态图」——导入后不动就是这么来的。
+     */
     private fun webpAnimFrames(file: File): Int {
         var frames = 0
         runCatching {
             RandomAccessFile(file, "r").use { raf ->
+                val total = raf.length()
                 raf.seek(12) // RIFF + size + WEBP
                 val hdr = ByteArray(8)
-                while (true) {
+                while (raf.filePointer + 8 <= total) {
                     if (raf.read(hdr) < 8) break
                     val name = String(hdr, 0, 4, Charsets.US_ASCII)
                     val size = leInt(hdr, 4)
-                    if (name == "ANIM") {
-                        raf.skipBytes(4) // 背景色
-                        val b = raf.read()
-                        frames = if (b < 0) 0 else b
-                        break
-                    }
-                    if (name == "VP8X") {
-                        // VP8X 里没有帧数，继续往后找 ANIM
-                        raf.skipBytes(size + (size and 1))
-                    } else {
-                        raf.skipBytes(size + (size and 1))
-                    }
+                    if (size < 0) break
+                    if (name == "ANMF") frames++
+                    // 用 seek 而不是 skipBytes：skipBytes 在靠近文件末尾时可能少跳
+                    val next = raf.filePointer + size.toLong() + (size and 1)
+                    if (next > total) break
+                    raf.seek(next)
                 }
             }
         }

@@ -87,6 +87,47 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             val exists = withContext(Dispatchers.IO) { repo.folder(saved) }
             _currentId.value = if (exists != null) saved else ImageFolder.ROOT
             refresh()
+            repairKindsOnce()
+        }
+    }
+
+    /**
+     * 一次性修正历史数据（v1.6.4）。
+     *
+     * v1.6.3 及之前 `AnimationSniffer.webpAnimFrames` 把 `ANIM` 块里的「循环次数」当成了帧数，
+     * 而循环次数通常是 0（无限循环），于是所有 WebP 动图都被写成 `kind=STATIC`、`frames=0`。
+     * 这些记录光改代码不会自己变好，必须重新嗅探一遍并回写。
+     *
+     * 只处理 `kind='STATIC'` 的行，每张只读文件头，跑完打标记只执行一次。
+     */
+    private fun repairKindsOnce() {
+        val ctx = getApplication<Application>()
+        val prefs = ctx.getSharedPreferences("gallery_prefs", android.content.Context.MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_KIND_REPAIRED, false)) return
+        viewModelScope.launch {
+            val changed = runCatching {
+                withContext(Dispatchers.IO) {
+                    var n = 0
+                    val rows = AppDatabase.get(app).imageDao().staticItems()
+                    for (row in rows) {
+                        ensureActive()
+                        val f = storage.fileOf(row.relPath)
+                        if (!f.isFile) continue
+                        val sniffed = AnimationSniffer.sniff(f, row.name)
+                        if (sniffed.kind == AnimationKind.STATIC) continue
+                        AppDatabase.get(app).imageDao().updateKind(
+                            row.id, sniffed.kind.name, sniffed.frames, sniffed.durationMs
+                        )
+                        n++
+                    }
+                    n
+                }
+            }.getOrDefault(0)
+            prefs.edit().putBoolean(KEY_KIND_REPAIRED, true).apply()
+            if (changed > 0) {
+                refresh()
+                notify("已修正 $changed 张动图的类型，现在能播了")
+            }
         }
     }
 
@@ -438,5 +479,10 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             }
             onResult(ok, items.size)
         }
+    }
+
+    private companion object {
+        /** v1.6.4：一次性的动图类型修正是否已执行 */
+        const val KEY_KIND_REPAIRED = "kind_repaired_v164"
     }
 }

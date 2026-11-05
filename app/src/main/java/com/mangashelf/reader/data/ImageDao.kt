@@ -75,6 +75,12 @@ interface ImageDao {
     @Query("UPDATE image_items SET sortIndex = :index WHERE id = :id")
     suspend fun updateSortIndex(id: Long, index: Int)
 
+    @Query("SELECT * FROM image_items WHERE kind = 'STATIC'")
+    suspend fun staticItems(): List<ImageItem>
+
+    @Query("UPDATE image_items SET kind = :kind, frames = :frames, durationMs = :durationMs WHERE id = :id")
+    suspend fun updateKind(id: Long, kind: String, frames: Int, durationMs: Int)
+
     /** 移动图片到另一个文件夹；[folderId] 传 0 即移回根 */
     @Query("UPDATE image_items SET folderId = :folderId WHERE id IN (:ids)")
     suspend fun moveToFolder(ids: List<Long>, folderId: Long)
