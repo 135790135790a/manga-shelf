@@ -73,6 +73,7 @@ fun SettingsScreen(
     onImportZip: () -> Unit,
     onOpenQueue: () -> Unit,
     onOpenHistory: () -> Unit,
+    onOpenDiagnostics: () -> Unit,
 ) {
     val context = LocalContext.current
 
@@ -306,6 +307,12 @@ fun SettingsScreen(
             item { GroupHeader("关于") }
             item { SettingsRow("版本", "v$versionName（versionCode 22）") {} }
             item { SettingsRow("数据库", "Room v9 · 无云端同步 · 不联网") {} }
+            // v1.6.3：常驻诊断入口。无 adb 设备时靠它把「为什么不动」的证据取出来
+            item {
+                SettingsRow("图片诊断", "只读：列出每张图的文件头、格式、帧数与缩略图状态") {
+                    onOpenDiagnostics()
+                }
+            }
             item {
                 SettingsRow("恢复默认设置", "主题、视图、护眼、手势、排序全部复位") {
                     confirmReset = true

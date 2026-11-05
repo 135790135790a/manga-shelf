@@ -1,7 +1,9 @@
 package com.mangashelf.reader.data
 
+import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.Context
+import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -28,106 +30,204 @@ data class AlbumPhoto(
     val mime: String
 )
 
+/** 相簿列表的加载结果。带着错误走，UI 才能解释「为什么是空的」。 */
+data class AlbumLoad(
+    val albums: List<Album> = emptyList(),
+    val error: String? = null
+)
+
+/** 一页照片。 */
+data class PhotoPage(
+    val photos: List<AlbumPhoto> = emptyList(),
+    val hasMore: Boolean = false,
+    val error: String? = null,
+    /** 相簿筛选彻底失效、已退回「全部图片」——UI 需要明确提示，不能假装筛选成功 */
+    val degraded: Boolean = false
+)
+
 /**
  * 读取手机真实相册分类。
  *
- * v1.6.2 之前相册导入走的是系统 Photo Picker（`PickMultipleVisualMedia`），分类由系统决定，
- * 只出现「相机 / 屏幕截图 / 下载内容」。这里改用 MediaStore 的 `BUCKET_ID` 分组，
- * 能列出微信、QQ、各相机 App 以及用户自建相簿。
+ * v1.6.3 重写要点（v1.6.2 在这里踩了坑）：
+ *
+ * 1. **不再把 `LIMIT/OFFSET` 塞进 `sortOrder`**。v1.6.2 就是这么写的，而这项能力只有部分
+ *    MediaProvider 实现（OEM 定制版本经常直接抛 SQLiteException）。一旦抛异常，外层
+ *    `runCatching` 把它吞成空表，界面就白屏了——用户看到的就是「相簿点进去什么都没有」。
+ *    现在的做法：先试一次带 LIMIT 的查询拿性能，失败就退回不带 LIMIT、由游标手动跳过前 N 条。
+ * 2. **列名不再用 `getColumnIndexOrThrow`**。部分 ROM 不返回 `WIDTH/HEIGHT/SIZE`，
+ *    严格取列会让整页失败。现在缺列就取默认值，只有 `_ID` 缺失才算真失败。
+ * 3. **错误必须能被界面拿到**。所有失败都转成 [PhotoPage.error] / [AlbumLoad.error]，
+ *    不再静默返回空表。
+ * 4. **相簿筛选失败时降级到「全部图片」**（用户拍板），并打 `degraded` 标记让 UI 提示。
  *
  * 权限：
  * - Android 13+：`READ_MEDIA_IMAGES`
  * - Android 12 及以下：`READ_EXTERNAL_STORAGE`
- * - Android 14+ 用户只授权了部分照片时，Cursor 只会返回被授权的那部分（系统行为），
- *   调用方需要提示「仅显示已授权照片」。
- *
- * 所有查询都包了 runCatching，取不到就返回空表，不抛异常。
+ * - Android 14+ 部分授权时 Cursor 只返回被授权的那部分（系统行为），由调用方提示。
  */
 object AlbumRepository {
 
     private const val PAGE = 120
 
+    private val ID = MediaStore.Images.Media._ID
+    private val NAME = MediaStore.Images.Media.DISPLAY_NAME
+    private val SIZE = MediaStore.Images.Media.SIZE
+    private val WIDTH = MediaStore.Images.Media.WIDTH
+    private val HEIGHT = MediaStore.Images.Media.HEIGHT
+    private val MIME = MediaStore.Images.Media.MIME_TYPE
+    private val BUCKET_ID = MediaStore.Images.Media.BUCKET_ID
+    private val BUCKET_NAME = MediaStore.Images.Media.BUCKET_DISPLAY_NAME
+    private val DATE = MediaStore.Images.Media.DATE_MODIFIED
+    private val EXTERNAL: Uri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+
+    private val ALBUM_PROJECTION = arrayOf(ID, BUCKET_ID, BUCKET_NAME)
+    private val PHOTO_PROJECTION = arrayOf(ID, NAME, SIZE, WIDTH, HEIGHT, MIME)
+
     /** 列出设备上真实存在的相簿，按照片数量降序。 */
-    suspend fun albums(context: Context): List<Album> = withContext(Dispatchers.IO) {
-        runCatching {
-            val resolver = context.contentResolver
-            val projection = arrayOf(
-                MediaStore.Images.Media._ID,
-                MediaStore.Images.Media.BUCKET_ID,
-                MediaStore.Images.Media.BUCKET_DISPLAY_NAME
-            )
-            val sort = "${MediaStore.Images.Media.DATE_MODIFIED} DESC"
-            val byBucket = LinkedHashMap<String, Album>()
-            resolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection, null, null, sort)
-                ?.use { c ->
-                    val idCol = c.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
-                    val bucketIdCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.BUCKET_ID)
-                    val bucketNameCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.BUCKET_DISPLAY_NAME)
-                    while (c.moveToNext()) {
-                        val id = c.getLong(idCol)
-                        val bucketId = c.getString(bucketIdCol) ?: continue
-                        val bucketName = c.getString(bucketNameCol)?.takeIf { it.isNotBlank() } ?: "未命名相簿"
-                        val prev = byBucket[bucketId]
-                        if (prev == null) {
-                            // 倒序遍历，第一张就是最新的，直接当封面
-                            byBucket[bucketId] = Album(
-                                bucketId = bucketId,
-                                name = bucketName,
-                                count = 1,
-                                coverUri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
-                            )
-                        } else {
-                            byBucket[bucketId] = prev.copy(count = prev.count + 1)
-                        }
+    suspend fun albums(context: Context): AlbumLoad = withContext(Dispatchers.IO) {
+        val byBucket = LinkedHashMap<String, Album>()
+        try {
+            context.contentResolver.query(EXTERNAL, ALBUM_PROJECTION, null, null, "$DATE DESC")?.use { c ->
+                val idCol = c.getColumnIndex(ID)
+                if (idCol < 0) return@use
+                val bucketIdCol = c.getColumnIndex(BUCKET_ID)
+                val bucketNameCol = c.getColumnIndex(BUCKET_NAME)
+                while (c.moveToNext()) {
+                    val id = c.getLong(idCol)
+                    // 个别 ROM 的 BUCKET_ID 为空或不存在，退回用相簿名当 key
+                    val key = c.str(bucketIdCol).ifBlank { c.str(bucketNameCol) }
+                    if (key.isBlank()) continue
+                    val name = c.str(bucketNameCol).ifBlank { "未命名相簿" }
+                    val prev = byBucket[key]
+                    byBucket[key] = if (prev == null) {
+                        Album(
+                            bucketId = key,
+                            name = name,
+                            count = 1,
+                            coverUri = ContentUris.withAppendedId(EXTERNAL, id)
+                        )
+                    } else {
+                        prev.copy(count = prev.count + 1)
                     }
                 }
-            byBucket.values.sortedByDescending { it.count }
-        }.getOrDefault(emptyList())
+            } ?: return@withContext AlbumLoad(error = "系统没有返回相册游标，可能缺少相册权限")
+        } catch (t: Throwable) {
+            return@withContext AlbumLoad(error = "读取相簿失败：${t.readable()}")
+        }
+        AlbumLoad(albums = byBucket.values.sortedByDescending { it.count })
     }
 
     /**
-     * 分页读一个相簿里的照片。
-     * [offset] 用 page * PAGE 传，返回空表表示到底了。
+     * 读某相簿的一页照片。
+     *
+     * 三级兜底：`BUCKET_ID` → `BUCKET_DISPLAY_NAME` → 全部图片（打 degraded 标记）。
      */
-    suspend fun photos(context: Context, bucketId: String, page: Int): List<AlbumPhoto> = withContext(Dispatchers.IO) {
-        runCatching {
-            val resolver = context.contentResolver
-            val projection = arrayOf(
-                MediaStore.Images.Media._ID,
-                MediaStore.Images.Media.DISPLAY_NAME,
-                MediaStore.Images.Media.SIZE,
-                MediaStore.Images.Media.WIDTH,
-                MediaStore.Images.Media.HEIGHT,
-                MediaStore.Images.Media.MIME_TYPE
-            )
-            // API 26 起 MediaStore 支持 SQL 片段里的 LIMIT/OFFSET
-            val sort = "${MediaStore.Images.Media.DATE_MODIFIED} DESC LIMIT $PAGE OFFSET ${page * PAGE}"
-            val selection = "${MediaStore.Images.Media.BUCKET_ID} = ?"
-            val args = arrayOf(bucketId)
-            val out = ArrayList<AlbumPhoto>(PAGE)
-            resolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection, selection, args, sort)
-                ?.use { c ->
-                    val idCol = c.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
-                    val nameCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
-                    val sizeCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.SIZE)
-                    val wCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.WIDTH)
-                    val hCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.HEIGHT)
-                    val mimeCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.MIME_TYPE)
-                    while (c.moveToNext()) {
-                        val id = c.getLong(idCol)
-                        out += AlbumPhoto(
-                            id = id,
-                            uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id),
-                            name = c.getString(nameCol) ?: "image_$id",
-                            sizeBytes = c.getLong(sizeCol),
-                            width = c.getInt(wCol),
-                            height = c.getInt(hCol),
-                            mime = c.getString(mimeCol) ?: "image/*"
-                        )
-                    }
+    suspend fun photos(context: Context, album: Album, page: Int): PhotoPage =
+        withContext(Dispatchers.IO) {
+            val offset = page * PAGE
+            var lastError: String? = null
+
+            val byId = queryPage(context, "$BUCKET_ID = ?", arrayOf(album.bucketId), offset)
+            if (byId.error == null) {
+                // 第一页拿到数据，或者已经翻到后面（空 = 到底），都算成功
+                if (byId.photos.isNotEmpty() || offset > 0) return@withContext byId
+            } else {
+                lastError = byId.error
+            }
+
+            val byName = queryPage(context, "$BUCKET_NAME = ?", arrayOf(album.name), offset)
+            if (byName.error == null) {
+                if (byName.photos.isNotEmpty() || offset > 0) return@withContext byName
+            } else {
+                lastError = lastError ?: byName.error
+            }
+
+            // 两种筛选都空/失败：降级到全部图片，让用户至少能选图导入
+            val all = queryPage(context, null, null, offset)
+            when {
+                all.error != null -> all.copy(error = lastError ?: all.error)
+                else -> all.copy(degraded = true)
+            }
+        }
+
+    /**
+     * 直接读全部图片的一页（相簿筛选整个不可用时的兜底，也给「全部照片」入口复用）。
+     */
+    suspend fun allPhotos(context: Context, page: Int): PhotoPage = withContext(Dispatchers.IO) {
+        queryPage(context, null, null, page * PAGE)
+    }
+
+    /**
+     * 查询一页。
+     *
+     * 先试 `sortOrder` 带 `LIMIT/OFFSET`（快），失败再退回不带 LIMIT 的全量读 + 手动跳过。
+     */
+    private fun queryPage(
+        context: Context,
+        selection: String?,
+        args: Array<String>?,
+        offset: Int
+    ): PhotoPage {
+        val resolver = context.contentResolver
+
+        val limited = read(resolver, selection, args, "$DATE DESC LIMIT $PAGE OFFSET $offset")
+        if (limited.ok) {
+            // LIMIT 生效时，正好取满一页就认为还有下一页
+            return PhotoPage(photos = limited.rows, hasMore = limited.rows.size == PAGE)
+        }
+
+        val plain = read(resolver, selection, args, "$DATE DESC")
+        if (!plain.ok) {
+            return PhotoPage(error = plain.error ?: "查询失败")
+        }
+        val slice = plain.rows.drop(offset).take(PAGE)
+        return PhotoPage(photos = slice, hasMore = plain.rows.size > offset + PAGE)
+    }
+
+    private class Outcome(
+        val ok: Boolean,
+        val rows: List<AlbumPhoto> = emptyList(),
+        val error: String? = null
+    )
+
+    private fun read(
+        resolver: ContentResolver,
+        selection: String?,
+        args: Array<String>?,
+        sort: String
+    ): Outcome {
+        val out = ArrayList<AlbumPhoto>(PAGE)
+        try {
+            var cursor: Cursor? = null
+            try {
+                cursor = resolver.query(EXTERNAL, PHOTO_PROJECTION, selection, args, sort)
+                if (cursor == null) return Outcome(false, error = "系统没有返回相册游标")
+                val idCol = cursor.getColumnIndex(ID)
+                if (idCol < 0) return Outcome(false, error = "相册数据缺少 _ID 列")
+                val nameCol = cursor.getColumnIndex(NAME)
+                val sizeCol = cursor.getColumnIndex(SIZE)
+                val wCol = cursor.getColumnIndex(WIDTH)
+                val hCol = cursor.getColumnIndex(HEIGHT)
+                val mimeCol = cursor.getColumnIndex(MIME)
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idCol)
+                    out += AlbumPhoto(
+                        id = id,
+                        uri = ContentUris.withAppendedId(EXTERNAL, id),
+                        name = cursor.str(nameCol).ifBlank { "image_$id" },
+                        sizeBytes = cursor.num(sizeCol),
+                        width = cursor.int(wCol),
+                        height = cursor.int(hCol),
+                        mime = cursor.str(mimeCol).ifBlank { "image/*" }
+                    )
                 }
-            out
-        }.getOrDefault(emptyList())
+            } finally {
+                cursor?.close()
+            }
+        } catch (t: Throwable) {
+            return Outcome(false, error = t.readable())
+        }
+        return Outcome(true, rows = out)
     }
 
     /** 当前系统版本需要的读相册权限名。 */
@@ -141,4 +241,20 @@ object AlbumRepository {
     /** 是否已经拿到读相册权限（部分授权时也算拿到，只是结果变少）。 */
     fun hasPermission(context: Context): Boolean =
         context.checkSelfPermission(readPermission()) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    // ---------------- 游标取值：缺列不抛异常 ----------------
+
+    private fun Cursor.str(col: Int): String =
+        if (col < 0) "" else runCatching { getString(col) }.getOrNull().orEmpty()
+
+    private fun Cursor.num(col: Int): Long =
+        if (col < 0) 0L else runCatching { getLong(col) }.getOrDefault(0L)
+
+    private fun Cursor.int(col: Int): Int =
+        if (col < 0) 0 else runCatching { getInt(col) }.getOrDefault(0)
+
+    private fun Throwable.readable(): String {
+        val msg = message?.takeIf { it.isNotBlank() } ?: "未知原因"
+        return "${javaClass.simpleName}: $msg"
+    }
 }

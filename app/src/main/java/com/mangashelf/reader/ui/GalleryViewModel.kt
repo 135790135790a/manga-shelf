@@ -21,6 +21,7 @@ import com.mangashelf.reader.data.ImageItem
 import com.mangashelf.reader.data.UgoiraFrame
 import com.mangashelf.reader.data.ImportBatch
 import com.mangashelf.reader.data.UgoiraParser
+import com.mangashelf.reader.service.GalleryImportService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
@@ -233,10 +234,15 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         val folderId = _currentId.value
         var ok = 0
         var fail = 0
+        var finished = false
+        val ctx = getApplication<Application>()
+        // v1.6.3：提到前台，切后台 / 锁屏时不被打断。导入本身仍在 viewModelScope 里跑。
+        GalleryImportService.start(ctx)
         importJob = viewModelScope.launch {
             try {
                 importMutex.withLock {
                     _busy.value = "正在导入 0 / ${uris.size}"
+                    GalleryImportService.update(ctx, "正在导入 0 / ${uris.size}")
                     val done = withContext(Dispatchers.IO) {
                         val copied = ArrayList<ImageItem>(uris.size)
                         var nextIndex = repo.nextSortIndex(folderId)
@@ -251,6 +257,10 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                                 fail++
                             }
                             _busy.value = "导入中 ${index + 1} / ${uris.size}（成功 $ok · 失败 $fail）"
+                            GalleryImportService.update(
+                                ctx,
+                                "导入中 ${index + 1} / ${uris.size}（成功 $ok · 失败 $fail）"
+                            )
                         }
                         if (copied.isNotEmpty()) repo.addItems(copied)
                         copied
@@ -276,15 +286,16 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                             )
                         }
                     }
-                    notify(
-                        when {
-                            done.isEmpty() && fail == 0 -> "没有导入任何图片"
-                            done.isEmpty() -> "导入失败：$fail 张都没读出来（格式不支持或读取被拒）"
-                            fail == 0 -> "已导入 ${done.size} 张图片"
-                            else -> "导入完成：成功 ${done.size} 张，失败 $fail 张"
-                        }
-                    )
+                    val summary = when {
+                        done.isEmpty() && fail == 0 -> "没有导入任何图片"
+                        done.isEmpty() -> "导入失败：$fail 张都没读出来（格式不支持或读取被拒）"
+                        fail == 0 -> "已导入 ${done.size} 张图片"
+                        else -> "导入完成：成功 ${done.size} 张，失败 $fail 张"
+                    }
+                    notify(summary)
                     refresh()
+                    GalleryImportService.done(ctx, summary)
+                    finished = true
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 _busy.value = null
@@ -293,6 +304,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             } finally {
                 _busy.value = null
                 importJob = null
+                if (!finished) GalleryImportService.stop(ctx)
             }
         }
     }

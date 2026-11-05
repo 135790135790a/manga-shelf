@@ -21,6 +21,7 @@ import com.mangashelf.reader.data.EyeScope
 import com.mangashelf.reader.data.GalleryPrefs
 import com.mangashelf.reader.data.SplashPrefs
 import com.mangashelf.reader.ui.FileBrowserScreen
+import com.mangashelf.reader.ui.GalleryDiagnosticsScreen
 import com.mangashelf.reader.ui.GalleryScreen
 import com.mangashelf.reader.ui.PageManageScreen
 import com.mangashelf.reader.ui.ReaderScreen
@@ -48,6 +49,8 @@ class MainActivity : ComponentActivity() {
                 var openBookId by rememberSaveable { mutableStateOf(NO_BOOK) }
                 var manageBookId by rememberSaveable { mutableStateOf(NO_BOOK) }
                 var browserOpen by rememberSaveable { mutableStateOf(false) }
+                // v1.6.3：图片诊断面板（常驻入口在设置页）
+                var diagOpen by rememberSaveable { mutableStateOf(false) }
                 // v1.6.0：两个工作栏（漫画 / 图片），各自的数据与状态完全独立
                 var workspace by rememberSaveable { mutableStateOf(GalleryPrefs.loadWorkspace(context)) }
                 val switchWorkspace = { next: String ->
@@ -70,6 +73,10 @@ class MainActivity : ComponentActivity() {
                         onImport = { browserOpen = false }
                     )
 
+                    diagOpen -> GalleryDiagnosticsScreen(
+                        onBack = { diagOpen = false }
+                    )
+
                     manageBookId != NO_BOOK -> PageManageScreen(
                         bookId = manageBookId,
                         onBack = { manageBookId = NO_BOOK }
@@ -90,6 +97,7 @@ class MainActivity : ComponentActivity() {
                                 onManagePages = { manageBookId = it },
                                 onOpenBrowser = { browserOpen = true },
                                 onOpenGallery = { switchWorkspace(GalleryPrefs.WORKSPACE_GALLERY) },
+                                onOpenDiagnostics = { diagOpen = true },
                                 themeMode = themeMode,
                                 onThemeChange = { mode ->
                                     themeMode = mode

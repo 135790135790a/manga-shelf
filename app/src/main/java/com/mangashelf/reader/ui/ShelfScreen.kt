@@ -126,6 +126,7 @@ fun ShelfScreen(
     onManagePages: (Long) -> Unit,
     onOpenBrowser: () -> Unit,
     onOpenGallery: () -> Unit,
+    onOpenDiagnostics: () -> Unit,
     themeMode: ThemeMode,
     onThemeChange: (ThemeMode) -> Unit
 ) {
@@ -451,6 +452,10 @@ fun ShelfScreen(
             onOpenHistory = {
                 settingsOpen = false
                 showHistoryPage = true
+            },
+            onOpenDiagnostics = {
+                settingsOpen = false
+                onOpenDiagnostics()
             }
         )
         return

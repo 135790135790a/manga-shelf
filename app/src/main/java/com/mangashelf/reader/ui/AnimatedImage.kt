@@ -32,6 +32,7 @@ import coil.ImageLoader
 import coil.compose.AsyncImage
 import coil.decode.GifDecoder
 import coil.decode.ImageDecoderDecoder
+import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.airbnb.lottie.compose.LottieAnimation
 import com.airbnb.lottie.compose.LottieCompositionSpec
@@ -106,7 +107,14 @@ fun AnimatedImage(
                         .build()
                 }
                 AsyncImage(
-                    model = ImageRequest.Builder(ctx).data(model).build(),
+                    model = ImageRequest.Builder(ctx)
+                        .data(model)
+                        // v1.6.3：列表页用默认 loader 把同一个 File 解成静态首帧并写进了磁盘缓存，
+                        // 预览页再拿同一份缓存就永远不动。播放时禁掉磁盘缓存并换一个内存 key，
+                        // 强制走带动图解码器的那条路。
+                        .memoryCacheKey("anim:${file.absolutePath}:${file.lastModified()}")
+                        .diskCachePolicy(CachePolicy.DISABLED)
+                        .build(),
                     imageLoader = loader,
                     contentDescription = null,
                     modifier = modifier,

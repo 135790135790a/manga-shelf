@@ -50,6 +50,12 @@
             android:name=".service.ImportForegroundService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- v1.6.3：图片工作栏的导入保活，独立于漫画侧服务 -->
+        <service
+            android:name=".service.GalleryImportService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
     </application>
 
 </manifest>

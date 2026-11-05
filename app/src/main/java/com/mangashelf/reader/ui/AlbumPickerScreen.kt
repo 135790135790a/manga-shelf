@@ -74,12 +74,16 @@ fun AlbumPickerScreen(
     val scope = rememberCoroutineScope()
     var granted by remember { mutableStateOf(AlbumRepository.hasPermission(ctx)) }
     var albums by remember { mutableStateOf<List<Album>>(emptyList()) }
+    var albumsError by remember { mutableStateOf<String?>(null) }
     var loadingAlbums by remember { mutableStateOf(false) }
     var current by remember { mutableStateOf<Album?>(null) }
     var photos by remember { mutableStateOf<List<AlbumPhoto>>(emptyList()) }
     var page by remember { mutableStateOf(0) }
     var selected by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var loadingPhotos by remember { mutableStateOf(false) }
+    // v1.6.3：错误与降级必须能被界面看到，不能再静默成空列表
+    var photosError by remember { mutableStateOf<String?>(null) }
+    var degraded by remember { mutableStateOf(false) }
 
     val permLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -90,7 +94,9 @@ fun AlbumPickerScreen(
     fun loadAlbums() {
         loadingAlbums = true
         scope.launch {
-            albums = AlbumRepository.albums(ctx)
+            val load = AlbumRepository.albums(ctx)
+            albums = load.albums
+            albumsError = load.error
             loadingAlbums = false
         }
     }
@@ -100,8 +106,10 @@ fun AlbumPickerScreen(
         loadingPhotos = true
         val nextPage = if (reset) 0 else page + 1
         scope.launch {
-            val list = AlbumRepository.photos(ctx, album.bucketId, nextPage)
-            photos = if (reset) list else photos + list
+            val data = AlbumRepository.photos(ctx, album, nextPage)
+            photos = if (reset) data.photos else photos + data.photos
+            photosError = data.error
+            degraded = data.degraded
             page = nextPage
             loadingPhotos = false
         }
@@ -180,11 +188,14 @@ fun AlbumPickerScreen(
 
                 current == null -> AlbumList(
                     albums = albums,
+                    error = albumsError,
                     loading = loadingAlbums,
                     onOpen = { album ->
                         current = album
                         selected = emptySet()
                         photos = emptyList()
+                        photosError = null
+                        degraded = false
                         page = 0
                         loadPhotos(album, reset = true)
                     },
@@ -195,10 +206,13 @@ fun AlbumPickerScreen(
                     photos = photos,
                     selected = selected,
                     loading = loadingPhotos,
+                    error = photosError,
+                    degraded = degraded,
                     onToggle = { id ->
                         selected = if (id in selected) selected - id else selected + id
                     },
-                    onLoadMore = { current?.let { loadPhotos(it, reset = false) } }
+                    onLoadMore = { current?.let { loadPhotos(it, reset = false) } },
+                    onRetry = { current?.let { loadPhotos(it, reset = true) } }
                 )
             }
         }
@@ -237,6 +251,7 @@ private fun PermissionHint(onRequest: () -> Unit) {
 @Composable
 private fun AlbumList(
     albums: List<Album>,
+    error: String?,
     loading: Boolean,
     onOpen: (Album) -> Unit,
     onRefresh: () -> Unit
@@ -253,7 +268,7 @@ private fun AlbumList(
         ) {
             Text("没有读到相簿", style = MaterialTheme.typography.titleMedium)
             Text(
-                "可能是权限只授予了部分照片，或设备上还没有图片。",
+                error ?: "可能是权限只授予了部分照片，或设备上还没有图片。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp, bottom = 16.dp)
@@ -302,8 +317,11 @@ private fun PhotoGrid(
     photos: List<AlbumPhoto>,
     selected: Set<Long>,
     loading: Boolean,
+    error: String?,
+    degraded: Boolean,
     onToggle: (Long) -> Unit,
-    onLoadMore: () -> Unit
+    onLoadMore: () -> Unit,
+    onRetry: () -> Unit
 ) {
     val state = rememberLazyGridState()
     // 用 snapshotFlow 读滚动位置，避免在组合期间读 layoutInfo 触发额外重组
@@ -314,40 +332,89 @@ private fun PhotoGrid(
             if (photos.isNotEmpty() && last >= photos.lastIndex - 12 && !loading) onLoadMore()
         }
     }
-    LazyVerticalGrid(
-        state = state,
-        columns = GridCells.Fixed(3),
-        contentPadding = PaddingValues(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        items(photos, key = { it.id }) { photo ->
-            Box {
-                AsyncImage(
-                    model = photo.uri,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .combinedClickable(onClick = { onToggle(photo.id) }, onLongClick = { onToggle(photo.id) })
+
+    // v1.6.3：空态必须有话说。v1.6.2 这里直接渲染空网格，用户看到的就是一片白。
+    if (photos.isEmpty() && !loading) {
+        Column(
+            Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("这个相簿里没有可读的照片", style = MaterialTheme.typography.titleMedium)
+            Text(
+                error ?: "可能是权限只授予了部分照片，或相簿里的图片都被过滤掉了。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp, bottom = 16.dp)
+            )
+            Button(onClick = onRetry) { Text("重新读取") }
+            Text(
+                "若一直为空，可回到上一页换一个相簿，或改用「快速从相册选」。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 12.dp)
+            )
+        }
+        return
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        if (degraded) {
+            Surface(tonalElevation = 2.dp, color = MaterialTheme.colorScheme.secondaryContainer) {
+                Text(
+                    "这个相簿没法按分类读取（系统限制），已改为显示全部图片。",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
                 )
-                if (photo.id in selected) {
-                    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)))
-                    Icon(
-                        Icons.Filled.CheckCircle,
-                        contentDescription = "已选",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)
-                    )
-                }
             }
         }
-        if (loading) {
-            item(span = { GridItemSpan(3) }) {
-                Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
-                    Text("加载中…", style = MaterialTheme.typography.labelMedium)
+        if (error != null && photos.isNotEmpty()) {
+            Surface(tonalElevation = 2.dp, color = MaterialTheme.colorScheme.errorContainer) {
+                Text(
+                    "读取出错：$error",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+        }
+        LazyVerticalGrid(
+            state = state,
+            columns = GridCells.Fixed(3),
+            contentPadding = PaddingValues(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            items(photos, key = { it.id }) { photo ->
+                Box {
+                    AsyncImage(
+                        model = photo.uri,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .combinedClickable(onClick = { onToggle(photo.id) }, onLongClick = { onToggle(photo.id) })
+                    )
+                    if (photo.id in selected) {
+                        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)))
+                        Icon(
+                            Icons.Filled.CheckCircle,
+                            contentDescription = "已选",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)
+                        )
+                    }
+                }
+            }
+            if (loading) {
+                item(span = { GridItemSpan(3) }) {
+                    Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
+                        Text("加载中…", style = MaterialTheme.typography.labelMedium)
+                    }
                 }
             }
         }

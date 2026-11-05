@@ -1,3 +1,26 @@
+## v1.6.3 — 2026-11-05
+
+> 只动图片工作栏与相册读取；漫画书架 / 阅读器 / 漫画导入导出 / 页面管理零改动（`git diff` 已验证）。
+
+### 修复
+
+- **相簿预览空白 + 无法导入**：`AlbumRepository` 重写。原实现把 `LIMIT $PAGE OFFSET ...` 拼进 `sortOrder`，OEM 定制 MediaProvider 会抛 `SQLiteException`，又被 `runCatching{}.getOrDefault(emptyList())` 吞掉 → 界面拿到空表且没有任何错误提示；同时用 `getColumnIndexOrThrow` 取 WIDTH/HEIGHT/SIZE/MIME_TYPE，部分 ROM 不返回这些列导致整页失败。现在分页参数失败自动退回全量读 + 手动切片，取列全部容错，`BUCKET_ID` → `BUCKET_DISPLAY_NAME` → 全部图片三级兜底，并把错误原样带出到界面。
+- **相簿页没有空态**：加载中 / 空 / 出错 / 降级四种状态都有对应界面，出错可重试。
+- **动图预览不播放**：预览态用的是自建带 Gif 解码器的 `ImageLoader`，但没禁用磁盘缓存，Coil 直接用同一个 `File` key 命中列表页写入的静态首帧缓存。现在播放态 `diskCachePolicy(DISABLED)` 并加独立 `memoryCacheKey`。
+
+### 新增
+
+- `service/GalleryImportService.kt`：图片导入前台服务（通知进度、完成通知、点击回到 App），与漫画侧服务分离。
+- `data/GalleryDiagnostics.kt` + `ui/GalleryDiagnosticsScreen.kt`：常驻诊断面板（设置 → 诊断信息），逐张输出文件头、重新嗅探结果、数据库元数据与帧目录，一键复制。
+
+### 数据库
+
+- 无变化（仍 version 10）。
+
+### 产物
+
+- APK 9957662 字节（9.50 MB），SHA-256 `3CB24D3205C0955955984E6007722DDFAF9E11F34AB3E51BAD28FE529252E37F`
+
 ## v1.6.2 — 2026-11-04
 
 > 只动图片工作栏，漫画书架 / 阅读器 / 导入 / 导出 / 页面管理零改动。
