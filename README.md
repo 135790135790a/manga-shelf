@@ -1,8 +1,10 @@
 # 漫画书架 MangaShelf
 
-> 把 **PDF / 图片** 变成可以用手指翻的漫画书 —— 安卓原生，纯本地、无网络、无广告。
+**中文** · [English](README.en.md)
 
-[**↓ 下载最新 APK**](https://github.com/135790135790a/manga-shelf/releases/latest)　·　[功能](#1-功能清单)　·　[编译](#4-怎么编译)　·　[网页版](#9-网页版web)　·　[已知限制](#7-已知限制)
+> 把 **PDF / 图片 / CBZ 压缩包** 变成可以用手指翻的漫画书 —— 安卓原生，纯本地、无网络、无广告。
+
+[**↓ 下载最新 APK**](https://github.com/135790135790a/manga-shelf/releases/latest)　·　[功能](#1-功能清单)　·　[编译](#4-怎么编译)　·　[已知限制](#7-已知限制)
 
 | | |
 | :-- | :-- |
@@ -10,13 +12,11 @@
 | **安装包** | 9.50 MB · 直接覆盖安装，数据不丢 |
 | **系统要求** | Android 7.0+（minSdk 24），targetSdk 34 |
 | **技术栈** | Kotlin · Jetpack Compose (Material 3) · Room · Coil · PdfRenderer |
-| **权限** | 前台服务 2 条 + 通知 1 条 + 相册读取 2 条（按需申请，cold start 不弹）；不联网 |
+| **权限** | 前台服务 2 条 + 通知 1 条 + 相册读取 2 条（按需申请，冷启动不弹）；不联网 |
 | **数据** | 全部在 App 私有目录，卸载即删；换机用设置里的「备份书架」 |
 
 **怎么用**：导入一个 PDF → 逐页渲染成图片 → 进书架 → 点开就能左右翻页。
-也可以一次选一堆图片（`001.jpg`、`002.jpg`…），按文件名顺序自动排成一本；或者选一个文件夹，整个文件夹成一本书。
-
-> 附带一个 [`web/`](web/README.md) 网页版：电脑上双击 `web\start.bat`，或手机连同一 Wi-Fi 用浏览器看。
+也可以一次选一堆图片（`001.jpg`、`002.jpg`…），按文件名顺序自动排成一本；或者选一个文件夹，整个文件夹成一本书；CBZ / ZIP 直接导入。
 
 ---
 
@@ -26,18 +26,8 @@
 
 | 问题 | 修复 |
 | :-- | :-- |
-| WebP 动图导入后显示「静态图」且预览不播 | `AnimationSniffer.webpAnimFrames` 原来把 WebP `ANIM` 块里的「循环次数」当成了帧数（循环次数通常是 0 = 无限循环），于是全部判成静态。现在按标准数 `ANMF` 块 |
-| 已经导入的旧记录不会自己变好 | 启动时做一次性的类型修正：扫 `kind='STATIC'` 的记录重新嗅探，发现是动图就回写 `kind/frames/durationMs` 并刷新列表，只跑一次 |
-
-### 相簿 / 动图 / 后台导入修复（v1.6.3 新增）
-
-| 能力 | 说明 |
-| :-- | :-- |
-| 相簿真正可用 | 修复「点进相簿一片空白、导入按钮永远是灰的」。根因是查询把 `LIMIT/OFFSET` 塞进 `sortOrder`（部分 ROM 的 MediaProvider 直接抛异常被吞成空表）且 `getColumnIndexOrThrow` 拿宽高/大小列。现在先试带分页的参数、失败退回全量读再手动切页；`BUCKET_ID` → `BUCKET_DISPLAY_NAME` → 全部图片三级兜底 |
-| 空态与错误态 | 相簿列表 / 照片网格都有加载中、空、出错三种状态；出错显示原因并可重试，降级加载时明确提示「已改为显示全部图片」 |
-| 动图预览真播放 | 修复「预览页不动」。原因是预览用的 `ImageLoader` 带 Gif 解码器但没禁用磁盘缓存，命中了列表页写入的首帧静态缓存。现在播放态 `diskCachePolicy(DISABLED)` + 独立 `memoryCacheKey` |
-| 图片后台导入 | 新增独立 `GalleryImportService`（前台服务 + 通知进度 + 完成通知），切后台 / 锁屏不再被打断；与漫画侧的 `ImportForegroundService` 完全分开，漫画链路零改动 |
-| 诊断面板 | 设置 → 诊断信息（常驻入口）。逐张列出名称 / relPath / 文件头 / 重新嗅探类型 / 数据库 kind / 帧数 / 时长 / 尺寸 / 缩略图 / 帧目录，一键复制，用于定位「导入后类型不对」这类问题 |
+| WebP 动图导入后显示「静态图」且预览不播 | `AnimationSniffer.webpAnimFrames` 原来把 WebP `ANIM` 块里的「循环次数」当成帧数（循环次数通常是 0 = 无限循环），于是全部判成静态。现在按标准数 `ANMF` 块 |
+| 已经导入的旧记录不会自己变好 | 首次进图片工作栏做一次性类型修正：扫 `kind='STATIC'` 的记录重新嗅探，发现是动图就回写 `kind/frames/durationMs` 并刷新列表，只跑一次 |
 
 ### 相簿 / 动图 / 后台导入修复（v1.6.3 新增）
 
@@ -84,8 +74,8 @@
 
 | 功能 | 说明 |
 | --- | --- |
-| 分批导入（已修复） | 「分批导入」现在真的可用：选父目录 → 弹窗列出里面的子文件夹 → 多选 → 「开始导入（N 批）」。已选列表显示文件夹名、书册数、页数、预估大小，可移除单个、清空、继续添加；未选时按钮禁用；重复添加会提示 |
-| 鲸鱼娘启动图 | 冷启动显示「鲸鱼娘书架」，五档密度自适应、等比缩放不拉伸；浅色底 `#F6F4EF`、深色底 `#16161B`，深色版整体压暗，夜里不刺眼 |
+| 分批导入（已修复） | 「分批导入」现在真的可用：选父目录 → 弹窗列出里面的子文件夹 → 多选 →「开始导入（N 批）」。已选列表显示文件夹名、书册数、页数、预估大小，可移除单个、清空、继续添加；未选时按钮禁用；重复添加会提示 |
+| 鲸鱼娘启动图 | 冷启动显示「鲸鱼娘书架」，四档密度自适应、等比缩放不拉伸；浅色底 `#F6F4EF`、深色底 `#16161B`，深色版整体压暗，夜里不刺眼 |
 | 设置页存储占比 | 设置 → 存储空间：环形图 + 图例，按字节统计原文件 / 漫画页面 / 缩略图 / 数据库 / 备份 / 其他；可切「分类占比 / 按漫画占比」（Top8 + 其他），点图例或扇区定位到对应漫画；「按漫画查看」列表支持搜索、按合计/原文件/缓存/缩略图排序、单本详情与清理缩略图缓存；可刷新并显示上次统计时间 |
 | 开场界面 | 设置 → 启动与开场：时长可选 0 / 1 / 2 / 3 / 5 秒（默认 2 秒），右下角「跳过」；设置里可「重新查看开场」预览而不重启。冷启动时系统 `windowBackground` 与 Compose 层用同一张图同一位置衔接，中间不跳变；切后台回来、旋转、Activity 重建都不重播 |
 
@@ -104,7 +94,7 @@
 
 | 能力 | 说明 |
 | --- | --- |
-| 多文件夹分批导入 | v1.5.9 起改为「逐个添加父目录 → 列表确认 → 开始导入」。系统的 `ACTION_OPEN_DOCUMENT` 选不了目录、`ACTION_OPEN_DOCUMENT_TREE` 又不支持多选，所以多选在 App 内完成 |
+| 多文件夹分批导入 | 系统的 `ACTION_OPEN_DOCUMENT` 选不了目录、`ACTION_OPEN_DOCUMENT_TREE` 又不支持多选，所以多选在 App 内完成：逐个添加父目录 → 列表确认 → 开始导入 |
 | 批次队列 | 右上「批次」打开，可上移/下移调顺序、跳过某一批、单独重试失败那批 |
 | 三级进度 | 批次（第几批/共几批）→ 书册（第几本/共几本）→ 页（第几页/共几页） |
 | 暂停 / 继续 | 只在**书册边界**生效（当前这本导完才停），通知栏也能点 |
@@ -114,8 +104,6 @@
 
 > 为什么暂停不在「页中间」生效：一页正在渲染时打断会留下半张图，恢复时还得判断哪页写到一半。
 > 停在书册边界，恢复逻辑就只是「从下一本书继续」，不会出现半成品。
-
-
 
 ### 书架
 
@@ -127,7 +115,7 @@
 | 继续阅读 | 顶部卡片直达上次读到的页，搜索时不打扰 |
 | 封面 | 缩略图两档（400px / 1000px），快速滑动 250ms 防抖 |
 | 主题 | 白天 / 夜晚（深灰，不是纯黑）/ 跟随系统，冷启动闪屏同步 |
-| 长按菜单 | 改名、作者/标签、阅读方向与模式、页序、页面管理、保存到相册、删除 |
+| 长按菜单 | 改名、作者/标签、阅读方向与模式、页序、页面管理、导出、保存到相册、删除 |
 | 回收站 | 删除进回收站，30 天内可恢复 |
 | 备份 | 设置里「备份书架」导出 zip（含图片），「从备份恢复」还原 |
 
@@ -138,6 +126,7 @@
 | 文件夹成书 | `OpenDocumentTree` 递归读，按相对路径自然排序（`2.png` 在 `10.png` 前、`ch2/` 在 `ch10/` 前） |
 | 单个 PDF | 系统文件选择器（SAF），不需要存储权限，逐页渲染 1440px |
 | 多张图片 | 按文件名排序，自动修正 EXIF 旋转，PNG 透明底合成白底 |
+| CBZ / ZIP | 直接当压缩包导入，内部按文件名自然排序 |
 | 杂项忽略 | `说明.txt`、`Thumbs.db`、`.DS_Store` 自动跳过；坏图跳过并继续 |
 | 失败回滚 | 导入失败不留垃圾目录 |
 | 空间预检 | 导入前算空间，不够直接告诉你差多少 |
@@ -153,11 +142,12 @@
 | --- | --- |
 | 三种模式 | 左右翻页 / 上下滚动（条漫）/ 双页并排，按书保存 |
 | 阅读方向 | 从右往左（日漫）/ 从左往右（国漫、美漫），按书切换 |
-| 翻页方式 | 点两侧区域、横向滑动、音量键（可关）、底部滑杆跳页 |
+| 翻页方式 | 点两侧区域、横向滑动、音量键（可关）、底部滑杆跳页、缩略图选页 |
 | 手势 | 双指缩放、缩放后拖动、双击缩放 |
 | 边界翻页 | 放大后拖到图片边界继续拖才翻页；拖不够就回弹，不误翻 |
 | 灵敏度 | 低 · 不易误翻 / 中 · 默认 / 高 · 很灵敏 |
 | 长按连翻 | 默认关；开了以后长按不存图，存图用工具栏「保存本页」 |
+| 护眼 | 暖黄 / 柔和 / 自定义，可设「手动 / 定时 19–7 点 / 跟随系统深色」 |
 | 进度记忆 | 自动记住每本读到第几页，下次打开续读 |
 
 ---
@@ -166,36 +156,26 @@
 
 ```
 漫画书翻译/                         ← 工程根目录，用 Android Studio 打开这一层
-├─ settings.gradle.kts
+├─ settings.gradle.kts              ← 依赖仓库（本地走阿里云镜像，CI 走官方）
 ├─ build.gradle.kts                 ← 插件版本：AGP 8.5.2 / Kotlin 1.9.24 / KSP
 ├─ gradle.properties
 ├─ gradle/wrapper/gradle-wrapper.properties
+├─ keystore/mangashelf.jks          ← 签名（debug/release 共用）
 ├─ app/
 │  ├─ build.gradle.kts              ← 依赖都在这里
 │  └─ src/main/
 │     ├─ AndroidManifest.xml
-│     ├─ res/values/{strings,themes}.xml
-│     ├─ res/drawable/ic_launcher.xml
+│     ├─ res/                       ← 主题、启动图、图标
 │     └─ java/com/mangashelf/reader/
-│        ├─ MangaShelfApp.kt        ← Application，持有 Repository
-│        ├─ MainActivity.kt         ← 书架 ↔ 阅读器 的极简导航（不引 Navigation 库）
-│        ├─ data/
-│        │  ├─ Book.kt              ← Room 实体
-│        │  ├─ BookDao.kt
-│        │  ├─ AppDatabase.kt
-│        │  ├─ ComicStorage.kt      ← 页面落盘规则（files/comics/<folder>/page_001.jpg）
-│        │  └─ BookRepository.kt
-│        ├─ importer/
-│        │  ├─ PdfImporter.kt       ← PdfRenderer 逐页渲染成 JPEG
-│        │  ├─ ImageImporter.kt     ← 批量图片规范化
-│        │  └─ FileNames.kt
-│        └─ ui/
-│           ├─ ShelfScreen.kt       ← 书架 + 导入 + 设置弹窗
-│           ├─ ShelfViewModel.kt
-│           ├─ ReaderScreen.kt      ← 翻页 / 缩放 / 沉浸模式
-│           ├─ ReaderViewModel.kt
-│           └─ theme/{Color,Theme}.kt
-├─ README.md                        ← 本文件
+│        ├─ MangaShelfApp.kt        ← Application，持有各 Repository
+│        ├─ MainActivity.kt         ← 书架 ↔ 阅读器 ↔ 文件页 ↔ 图片栏 的极简导航
+│        ├─ data/                   ← Room 实体、DAO、迁移、存储规则、备份、统计
+│        ├─ importer/               ← PDF / 图片 / 文件夹 / CBZ 导入
+│        ├─ export/                 ← 漫画导出（PDF / ZIP / 长图）
+│        ├─ service/                ← 导入前台服务（漫画 / 图片各一套）
+│        └─ ui/                     ← 所有界面：书架、阅读器、设置、搜索、文件页、图片栏
+├─ web/                             ← 网页版（Python + PyMuPDF）
+├─ README.md  ·  README.en.md       ← 中文 / English
 └─ DESIGN.md                        ← 设计说明（产品流程、数据结构、技术决策）
 ```
 
@@ -214,14 +194,13 @@
 
 ## 4. 怎么编译
 
-工程**自带 `gradlew`**（Gradle 8.7 的 wrapper，含 `gradle-wrapper.jar`），
-依赖仓库已配好阿里云镜像（`settings.gradle.kts`），所以直接就能构建。
+工程**自带 `gradlew`**（Gradle 8.7 的 wrapper），依赖仓库已配好阿里云镜像（`settings.gradle.kts`），所以直接就能构建。
 
 **方式 A：命令行（最快）**
 
 ```powershell
 cd "C:\Users\86139\Desktop\deepseek\漫画书翻译"
-.\gradlew.bat assembleRelease     # 发布包，6.89 MB（R8 压缩已关闭）
+.\gradlew.bat assembleRelease     # 发布包，约 9.5 MB（R8 压缩已关闭）
 ```
 
 签名密钥在工程里（`keystore/mangashelf.jks`），debug 和 release 都用它，
@@ -247,23 +226,22 @@ adb install -r app\build\outputs\apk\release\app-release.apk
 ```
 
 > 第一次构建会联网下载依赖（约几百 MB），请保证网络通畅。
-> 如果官方仓库慢，`settings.gradle.kts` 里已经把阿里云镜像放在最前面了。
-> 如果下载慢，可以在 `settings.gradle.kts` 的 `repositories { }` 里把 `google()`、`mavenCentral()`
-> 换成国内镜像（阿里云 `maven.aliyun.com/repository/google` 与 `.../public`）。
+> 官方仓库慢的话，`settings.gradle.kts` 里已经把阿里云镜像放在最前面了（CI 环境自动跳过镜像）。
 
 ---
 
 ## 5. 使用流程
 
-1. 打开 App → 空书架 → 点 **导入漫画**（或空状态里的按钮）
-2. 选 **PDF 文件** 或 **选择图片（可多选）**
+1. 打开 App → 空书架 → 点 **导入漫画**
+2. 选 **选择文件夹（整本成一本书）** / **批量导入（父文件夹里的每一本）** / **分批导入（多选文件夹，每夹一批）** / **选择 PDF 文件** / **选择图片（可多选）** / **选择 CBZ / ZIP 压缩包**
 3. 看到"正在导入 12 / 86 页"的进度，导入完自动出现在书架上，封面是第一页
 4. 点封面进入阅读：
    - 左右滑动翻页
    - 点屏幕中间 → 顶部出现标题/返回/页码，底部出现跳页滑杆与方向切换
    - 点屏幕左侧或右侧 → 上一页/下一页
    - 双指捏合或双击 → 放大看细节，再双击还原
-5. 长按书架卡片 → 改名 / 改阅读方向 / 删除
+   - 长按 → 保存当前页到相册
+5. 长按书架卡片 → 改名 / 改阅读方向 / 页序 / 页面管理 / 导出 / 删除
 
 日漫默认是**从右往左**翻（第 2 页在第 1 页的左边）。如果导的是国漫/美漫，在阅读器底部点
 "改为从左往右"，或者在书架长按里切换，设置会记住。
@@ -273,11 +251,12 @@ adb install -r app\build\outputs\apk\release\app-release.apk
 ## 6. 数据存在哪
 
 - 页面图片：`/data/data/com.mangashelf.reader/files/comics/<12位目录名>/page_001.jpg`
-- 书籍信息：Room 数据库 `mangashelf.db`（表 `books`）
-- 完全在应用私有目录里，卸载即清空。**不申请存储权限**，也不用 MediaStore。
+- 图片工作栏：`/data/data/com.mangashelf.reader/files/gallery/`
+- 书籍信息：Room 数据库 `mangashelf.db`
+- 自动备份：`/data/data/com.mangashelf.reader/files/backup/`
+- 完全在应用私有目录里，卸载即清空。**不申请存储权限**，也不用 MediaStore（存相册除外）。
 
-想导出/备份的话，可以把 `files/comics` 目录拷出来（需要 root 或 `adb backup`），
-或者在 `ShelfScreen` 的删除逻辑旁边加一个"导出"按钮（见 DESIGN.md 的扩展点）。
+想导出/备份：设置 → 数据与备份 →「备份书架」导出 zip（含图片），换机后「从备份恢复」。
 
 ---
 
@@ -286,23 +265,20 @@ adb install -r app\build\outputs\apk\release\app-release.apk
 - **PDF 每页会被渲染成 1440px 宽的 JPEG**（质量 88）。文字密集的 A4 扫描件放大到极限会略糊；
   想要更清晰把 `PdfImporter.TARGET_WIDTH` 调到 2048（代价是存储和内存翻倍）。
 - 有密码保护的 PDF 不支持（会提示失败）。
-- PDF 里的**文字不会被抽出来**，没有搜索/选词（这是下一步要做的 OCR 方向）。
-- 不支持 CBZ/CBR/ZIP 压缩包；如果图片很多，请先解压再选图片，或者按 DESIGN.md 加一个 ZipImporter。
-- 只做了单页排版，没有"双页跨页"（平板横屏适用）。
-- 翻页是滑动动画，没有做仿真翻页（page curl）效果。
+- PDF 里的**文字不会被抽出来**，没有搜索/选词（这是 OCR + 翻译方向的事）。
+- 不支持 CBR（RAR）；CBZ / ZIP 可以。
+- **未做真机回归**：开发环境 `adb devices` 全程为空，所有版本都是编译期 + 静态校验，
+  `测试报告-*.md` 里逐条标了哪些需要在真机上确认。
+- 国产 ROM 的后台保活策略仍可能杀掉导入进程；本版靠前台服务 + 逐张入库兜底，被杀时已完成的不丢。
 
 ---
 
 ## 8. 下一步可以加什么
 
-按投入产出排序：
-
-1. **翻译**（这就是这个文件夹叫"漫画书翻译"的原因）：长按/框选漫画格子 → 区域截图 → OCR → 翻译 → 浮层盖回原位。详见 `DESIGN.md` 第 7 节，`ui/ReaderScreen.kt` 里已经留好了接入手势的位置。
-2. CBZ/ZIP 批量导入（先解压到临时目录，再走 `ImageImporter`）。
-3. 平板双页、横屏跨页。
-4. 阅读器亮度/暖色滤镜（夜间看白底漫画）。
-5. 书架排序（按最近阅读 / 手动拖拽）、文件夹分组。
-6. 长条漫画（Webtoon）模式：竖向连续滚动而不是一页一页。
+1. **翻译**（这就是这个文件夹叫"漫画书翻译"的原因）：长按/框选漫画格子 → 区域截图 → OCR → 翻译 → 浮层盖回原位。详见 `DESIGN.md` 第 7 节。
+2. 云同步与账号体系（目前是本地备份 + 系统自动备份，没有服务端）。
+3. 平板双页跨页（横向跨页）、更大屏的布局适配。
+4. 漫画内文本搜索（需要 OCR 索引）。
 
 ---
 
@@ -334,42 +310,29 @@ adb install -r app\build\outputs\apk\release\app-release.apk
 2. 把 APK 传到手机（数据线 / 微信文件传输 / QQ / 网盘都行）
 3. 点开安装 → 打开「漫画书架」
 
-**完全离线可用**：不需要电脑、不需要联网、除了导入时的前台服务，不申请任何权限；读 PDF / 图片走系统文件选择器。
-
-已核对信息：
+**完全离线可用**：不需要电脑、不需要联网；读 PDF / 图片走系统文件选择器。
 
 | 项 | 值 |
 | --- | --- |
 | 包名 | `com.mangashelf.reader` |
-| 版本 | 1.5.6（versionCode 18） |
+| 版本 | 1.6.3（versionCode 26） |
 | 系统要求 | Android 7.0+（minSdk 24），targetSdk 34 |
-| 签名 | Android Debug 证书（个人自用没问题） |
-| 大小 | 7.06 MB（7,400,355 字节，release，未开 R8；见下方说明） |
+| 签名 | 自签名证书（`keystore/mangashelf.jks`），后续版本可覆盖升级 |
+| 大小 | 9,960,206 字节（9.50 MB） |
 | 图标 | 企鹅娘（由 `企鹅娘-无水印.png` 生成，v1.2 起固定使用） |
 
-> 因为用的是 debug 签名，以后要**覆盖安装**必须用同一个 debug key 签名的包；
-> 如果哪天换了签名（比如出正式版），需要先卸载旧的再装。
->
 > **版本约定**：每次更新生成**新文件**，不覆盖、不删除旧 APK（文件名带版本号）。
 > 历史版本、每版改动、SHA-256 都在 [版本记录.md](版本记录.md) 里。
 
 ### 自己重新构建
 
-工程里已经带了 `gradlew`（Gradle 8.7），依赖仓库换成了阿里云镜像（快很多）：
-
-```powershell
-cd "C:\Users\86139\Desktop\deepseek\漫画书翻译"
-.\gradlew.bat assembleRelease
-# 产物：app\build\outputs\apk\release\app-release.apk
-```
-
-需要 JDK 17。用 Android Studio 打开这个目录也可以（`File > Open` → Sync → Run）。
+见 [第 4 节](#4-怎么编译)。
 
 ### 用 GitHub Actions 自动构建（可选）
 
 仓库带了两条流水线（`.github/workflows/android.yml`）：
 
-- **平时 push / PR**：跑单测 + 打 debug 包，几分钟出结果；
+- **平时 push / PR**：跑 lint + 单测 + 打 debug 包；
 - **打 tag（`v*`）**：跑 lint + 单测 + `assembleRelease`，并把 APK 传到对应的 Release。
 
 签名默认用仓库里的 `keystore/mangashelf.jks`。想改成用 Secrets 托管，在
@@ -402,7 +365,7 @@ cd "C:\Users\86139\Desktop\deepseek\漫画书翻译"
 | --- | --- | --- |
 | 能否离线用 | **可以，完全本地** | 不行，电脑要开着 |
 | PDF 渲染 | 手机上的 `PdfRenderer` | 电脑上的 PyMuPDF |
-| 导入方式 | 系统文件选择器（**文件夹** / PDF / 多选图片） | 文件夹上传 / 电脑路径 / 文件 |
+| 导入方式 | 系统文件选择器（**文件夹** / PDF / 图片 / CBZ） | 文件夹上传 / 电脑路径 / 文件 |
 | 文件夹成书 | **支持**（SAF 文件夹树，递归子目录） | 支持（自然排序 + 子文件夹） |
 | 进度保存 | Room 数据库 | 服务端 `library.json` |
 | 手机手势 | 滑动翻页 + 双指缩放 | 滑动翻页 + 双指缩放 |
