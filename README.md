@@ -1,4 +1,4 @@
-# 漫画书架 MangaShelf
+# MangaShelf · 漫画书架
 
 **中文** · [English](README.en.md)
 
