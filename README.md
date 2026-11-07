@@ -325,7 +325,7 @@ adb install -r app\build\outputs\apk\release\app-release.apk
 | 版本 | 1.6.4（versionCode 27） |
 | 系统要求 | Android 7.0+（minSdk 24），targetSdk 34 |
 | 签名 | 自签名证书（`keystore/mangashelf.jks`），后续版本可覆盖升级 |
-| 大小 | 9,986,866 字节（9.52 MB） |
+| 大小 | 9,986,870 字节（9.52 MB） |
 | 图标 | 企鹅娘（由 `企鹅娘-无水印.png` 生成，v1.2 起固定使用） |
 
 > **版本约定**：每次更新生成**新文件**，不覆盖、不删除旧 APK（文件名带版本号）。

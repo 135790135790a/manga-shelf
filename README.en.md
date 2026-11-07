@@ -322,7 +322,7 @@ See [web/README.md](web/README.md).
 | Version | 1.6.4 (versionCode 27) |
 | Requirements | Android 7.0+ (minSdk 24), targetSdk 34 |
 | Signing | Self-signed key (`keystore/mangashelf.jks`), so later builds upgrade in place |
-| Size | 9,986,866 bytes (9.52 MB) |
+| Size | 9,986,870 bytes (9.52 MB) |
 | Icon | Penguin girl (generated from `企鹅娘-无水印.png`, fixed since v1.2) |
 
 > **Versioning rule**: every release produces a **new file**; old APKs are never overwritten or deleted (the file name carries the version).

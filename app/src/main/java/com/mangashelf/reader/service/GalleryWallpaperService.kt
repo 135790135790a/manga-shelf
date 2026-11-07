@@ -18,6 +18,7 @@ import android.os.SystemClock
 import android.service.wallpaper.WallpaperService
 import android.util.Log
 import android.view.SurfaceHolder
+import androidx.annotation.RequiresApi
 import com.mangashelf.reader.data.AnimationKind
 import com.mangashelf.reader.data.GalleryStorage
 import com.mangashelf.reader.data.WallpaperTarget
@@ -66,6 +67,7 @@ class GalleryWallpaperService : WallpaperService() {
     }
 
     /** 光栅动图（GIF / APNG / 动图 WebP）走的 drawable 渲染器。 */
+    @RequiresApi(Build.VERSION_CODES.P)
     private class DrawableRenderer(
         private val drawable: Drawable,
         private val contentW: Int,
