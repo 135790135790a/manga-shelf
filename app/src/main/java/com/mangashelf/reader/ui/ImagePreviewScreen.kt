@@ -29,11 +29,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,9 +45,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import android.widget.Toast
+import com.mangashelf.reader.data.AnimationKind
 import com.mangashelf.reader.data.ImageItem
 import com.mangashelf.reader.data.UgoiraFrame
+import com.mangashelf.reader.data.WallpaperSetter
+import kotlinx.coroutines.launch
 import java.io.File
 
 /**
@@ -76,6 +83,8 @@ fun ImagePreviewScreen(
     val pagerState = rememberPagerState(initialPage = start) { items.size }
     var chrome by remember { mutableStateOf(true) }
     var zoomed by remember { mutableStateOf(false) }
+    val appCtx = LocalContext.current.applicationContext
+    val scope = rememberCoroutineScope()
     val current = items.getOrNull(pagerState.currentPage) ?: items.first()
 
     BackHandler(onBack = onClose)
@@ -167,6 +176,29 @@ fun ImagePreviewScreen(
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(top = 2.dp)
                     )
+                    // v1.6.4：设为壁纸。静态图直接铺；动图唤起系统动态壁纸选择器。
+                    TextButton(
+                        onClick = {
+                            val kind = AnimationKind.fromName(current.kind)
+                            if (WallpaperSetter.isLive(kind)) {
+                                val r = WallpaperSetter.applyLive(appCtx, current.relPath, kind)
+                                Toast.makeText(appCtx, r.message, Toast.LENGTH_LONG).show()
+                            } else {
+                                scope.launch {
+                                    val r = WallpaperSetter.applyStill(appCtx, fileOf(current))
+                                    Toast.makeText(appCtx, r.message, Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                        modifier = Modifier.padding(top = 2.dp)
+                    ) {
+                        Text(
+                            text = "设为壁纸",
+                            color = Color(0xFFFFB74D),
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
                 }
             }
         }

@@ -1,3 +1,36 @@
+## v1.6.4 — 2026-11-07
+
+> 只动图片导入工作栏（手势 / 壁纸 / 数据持久化）；漫画书架、阅读器、漫画导入导出、页面管理零改动（`git diff v1.6.3` 已验证为空）。
+
+### 修复
+
+- **长按拖动后仍弹出「图片操作」菜单**（v1.6.2 / v1.6.3 两次都没修掉的真因）：`onDragCancel = { onDragEnd(false) }` 把「手势被取消」当成了「没有移动」。移动成功后列表重组会销毁被拖拽的格子，从而触发 cancel，于是又走一次「没移动 → 弹菜单」，出现「已移动 1 张图片」Toast 与菜单同屏的现象。现在 `onDragCancel` 独立成 `onCancel()`，只清视觉态，不弹菜单、不改选中。
+- 手势加了 `Log.i("TileGesture", ...)` 打点，`adb logcat -s TileGesture` 可核对事件序列（LONG_PRESS / UP dist/slop/moved / DROP action / CANCEL）。
+
+### 新增
+
+- **设为壁纸**：预览页底部信息条。静态图走 `WallpaperManager.setBitmap`（桌面 + 锁屏）；GIF / 动图 WebP / APNG / Ugoira / Lottie 走新增的 `service/GalleryWallpaperService.kt`（`WallpaperService`，25fps 自绘）。Ugoira 只缓存当前帧与预取帧，避免几百帧一起解进内存。SVGA 的动画只能由 `SVGAImageView` 驱动，壁纸里做不到，会明确提示。
+- **数据状态面板**：设置 → 数据与备份 → 数据状态，展示图片工作栏张数与占用、数据库大小、自动快照份数，可手动立即快照。
+
+### 变更
+
+- `BackupManager.export/restore` 增加可选 `gallery` 参数：整库备份现在同时打包 `gallery/` 下的图片与 `gallery/ugoira/<uuid>/` 的帧目录；不传时行为与旧版完全一致，老备份仍可恢复。
+- `BookRepository` 增加 `imageDao` / `galleryStorage` 两个可空属性，由 `MangaShelfApp` 注入。
+
+### 权限
+
+- 新增 `SET_WALLPAPER`（安装即授予，非运行时权限）；`GalleryWallpaperService` 由系统以 `BIND_WALLPAPER` 绑定。
+
+### 数据库
+
+- 无变化（仍 version 10）。
+
+### 产物
+
+- `漫画书架-v1.6.4.apk` · 9.52 MB（9,986,866 字节）
+- versionCode 27 / versionName 1.6.4
+- SHA-256 `E67ED022B168B2F70FD51303E6C0F09813DE65F2B48C17669EC0D1D532BDEE5E`
+
 ## v1.6.3 — 2026-11-05
 
 > 只动图片工作栏与相册读取；漫画书架 / 阅读器 / 漫画导入导出 / 页面管理零改动（`git diff` 已验证）。

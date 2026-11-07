@@ -127,6 +127,7 @@ fun SettingsScreen(
         mutableStateOf(runCatching { SearchHistory.load(context).size }.getOrDefault(0))
     }
     var lastBackup by remember { mutableStateOf(runCatching { AutoBackupProxy.lastName(context) }.getOrNull().orEmpty()) }
+    var showDataStatus by remember { mutableStateOf(false) }
 
     // v1.5.9 追加：开场界面时长 + 预览
     var splashMs by remember { mutableStateOf(runCatching { SplashPrefs.load(context) }.getOrDefault(SplashPrefs.DEFAULT_MS)) }
@@ -281,6 +282,8 @@ fun SettingsScreen(
             item { SettingsRow("从最近备份恢复", "只恢复数据库，不含图片") { onRestoreLocal() } }
             item { SettingsRow("导出完整备份", "数据库 + 全部图片，zip 存到所选目录") { onExportZip() } }
             item { SettingsRow("从完整备份恢复", "选择之前导出的 zip") { onImportZip() } }
+            // v1.6.4：数据状态（图片工作栏占用、数据库大小、自动快照份数）
+            item { SettingsRow("数据状态", "图片工作栏 · 数据库 · 自动快照") { showDataStatus = true } }
 
             // ---------- 存储空间（v1.5.9）----------
             item { GroupHeader("存储空间") }
@@ -323,6 +326,9 @@ fun SettingsScreen(
     }
 
     // ---------------- 各类选择对话框 ----------------
+    if (showDataStatus) {
+        DataStatusDialog(onDismiss = { showDataStatus = false })
+    }
     when (dialog) {
         SettingsDialog.THEME -> ChoiceDialog(
             title = "主题",

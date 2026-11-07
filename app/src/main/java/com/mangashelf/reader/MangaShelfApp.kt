@@ -106,13 +106,17 @@ class MangaShelfApp : Application(), ImageLoaderFactory {
 
     private fun createRepository(): BookRepository {
         val database = AppDatabase.get(this)
-        return BookRepository(
+        val repo = BookRepository(
             dao = database.bookDao(),
             pageDao = database.pageDao(),
             taskDao = database.importTaskDao(),
             batchDao = database.importBatchDao(),
             storage = ComicStorage(this)
         )
+        // v1.6.4：让整库备份同时覆盖图片工作栏
+        repo.imageDao = database.imageDao()
+        repo.galleryStorage = galleryStorage
+        return repo
     }
 
     /**

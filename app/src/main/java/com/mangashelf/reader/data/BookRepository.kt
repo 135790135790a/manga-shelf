@@ -7,6 +7,7 @@ import android.net.Uri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -18,13 +19,30 @@ class BookRepository(
     val storage: ComicStorage
 ) {
 
+    /** v1.6.4：图片工作栏也进备份。可为 null（老调用点/单元测试不传）。 */
+    var imageDao: ImageDao? = null
+    var galleryStorage: GalleryStorage? = null
+
     /** 整库备份（含图片），见 [BackupManager] */
     suspend fun exportBackup(
         context: Context,
         target: Uri,
         onProgress: (Int, Int) -> Unit = { _, _ -> }
     ): BackupManager.ExportResult = withContext(Dispatchers.IO) {
-        BackupManager.export(context, storage, dao.allBooks(), pageDao, target, onProgress)
+        val snapshot = runCatching {
+            val daoRef = imageDao
+            val storageRef = galleryStorage
+            if (daoRef == null || storageRef == null) {
+                null
+            } else {
+                BackupManager.GallerySnapshot(
+                    folders = daoRef.observeAllFolders().first(),
+                    items = daoRef.allItems(),
+                    storage = storageRef
+                )
+            }
+        }.getOrNull()
+        BackupManager.export(context, storage, dao.allBooks(), pageDao, target, snapshot, onProgress)
     }
 
     /** 从备份恢复（不覆盖现有书，冲突时重新分配目录） */
@@ -33,7 +51,15 @@ class BookRepository(
         source: Uri,
         onProgress: (Int, Int) -> Unit = { _, _ -> }
     ): BackupManager.RestoreResult = withContext(Dispatchers.IO) {
-        BackupManager.restore(context, storage, this@BookRepository, source, onProgress)
+        BackupManager.restore(
+            context,
+            storage,
+            this@BookRepository,
+            source,
+            imageDao,
+            galleryStorage,
+            onProgress
+        )
     }
 
     /**

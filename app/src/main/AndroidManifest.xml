@@ -19,6 +19,8 @@
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
+    <!-- 设为静态壁纸（v1.6.4）。普通权限，安装即有；动图壁纸走下面的 LiveWallpaper 服务，不需要它。 -->
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
 
     <application
         android:name=".MangaShelfApp"
@@ -56,6 +58,23 @@
             android:name=".service.GalleryImportService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!--
+            v1.6.4：动图壁纸。系统壁纸 API 只吃静态 Bitmap，动图必须自己是 WallpaperService。
+            android:permission 由系统在绑定时校验，写死成 BIND_WALLPAPER 才允许被设为壁纸。
+        -->
+        <service
+            android:name=".service.GalleryWallpaperService"
+            android:exported="true"
+            android:label="@string/wallpaper_label"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.wallpaper"
+                android:resource="@xml/wallpaper" />
+        </service>
     </application>
 
 </manifest>

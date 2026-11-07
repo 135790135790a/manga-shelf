@@ -81,6 +81,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
+ * 图片格子的手势日志标签。验收「拖动松手不弹菜单」时用
+ * `adb logcat -s TileGesture` 抓完整事件序列。
+ */
+private const val GESTURE_TAG = "TileGesture"
+
+/**
  * 图片工作栏：独立于书架的文件夹 + 图片浏览。
  *
  * 支持多级文件夹、三档视图、四种排序、长按菜单（重命名/删除/移动）、多选批量。
@@ -366,6 +372,11 @@ fun GalleryScreen(
                                     },
                                     onDragEnd = { moved ->
                                         val target = if (moved) hoverFolder else null
+                                        android.util.Log.i(
+                                            GESTURE_TAG,
+                                            "DROP item=${image.id} moved=$moved target=${target?.id ?: "none"} " +
+                                                "action=${if (target != null) "MOVE" else if (!moved) "MENU" else "CANCEL_DROP"}"
+                                        )
                                         when {
                                             // 拖到文件夹上松手：只移动，不弹菜单、不开预览
                                             target != null -> {
@@ -380,6 +391,11 @@ fun GalleryScreen(
                                             // 长按拖到空白处：什么都不做
                                             else -> Unit
                                         }
+                                        dragItem = null
+                                        hoverFolder = null
+                                    },
+                                    // 组件销毁 / 手势被接管：只清视觉拖拽态，不弹菜单、不改选中
+                                    onCancel = {
                                         dragItem = null
                                         hoverFolder = null
                                     }
@@ -720,7 +736,10 @@ private fun ImageTile(
     modifier: Modifier = Modifier,
     onDragStart: (Offset) -> Unit = {},
     onDrag: (Offset) -> Unit = {},
-    onDragEnd: (Boolean) -> Unit = {}
+    onDragEnd: (Boolean) -> Unit = {},
+    // 手势被取消（组件被移出组合、外层抢走事件、系统返回手势、切后台）。
+    // 语义上「取消」≠「没移动」：取消时必须只清拖拽态，绝不能弹菜单。
+    onCancel: () -> Unit = {}
 ) {
     Box(
         modifier
@@ -737,14 +756,31 @@ private fun ImageTile(
             .pointerInput(item.id) {
                 var total = Offset.Zero
                 detectDragGesturesAfterLongPress(
-                    onDragStart = { offset -> total = Offset.Zero; onDragStart(offset) },
+                    onDragStart = { offset ->
+                        total = Offset.Zero
+                        android.util.Log.i(GESTURE_TAG, "LONG_PRESS item=${item.id} state=LONG_PRESS_PENDING")
+                        onDragStart(offset)
+                    },
                     onDrag = { change, amount ->
                         change.consume()
                         total += amount
                         onDrag(amount)
                     },
-                    onDragEnd = { onDragEnd(total.getDistance() > viewConfiguration.touchSlop) },
-                    onDragCancel = { onDragEnd(false) }
+                    onDragEnd = {
+                        val dist = total.getDistance()
+                        val moved = dist > viewConfiguration.touchSlop
+                        android.util.Log.i(
+                            GESTURE_TAG,
+                            "UP item=${item.id} dist=${dist.toInt()}px slop=${viewConfiguration.touchSlop.toInt()}px moved=$moved state=DROPPING"
+                        )
+                        onDragEnd(moved)
+                    },
+                    // 这里绝对不能复用 onDragEnd(false)：拖动成功后视图重组会销毁本组件，
+                    // 从而触发 cancel；若把它当成「没移动」，就会在移动成功后弹出图片操作菜单。
+                    onDragCancel = {
+                        android.util.Log.i(GESTURE_TAG, "CANCEL item=${item.id} state=IDLE (no menu)")
+                        onCancel()
+                    }
                 )
             }
     ) {

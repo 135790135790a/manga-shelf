@@ -8,8 +8,8 @@
 
 | | |
 | :-- | :-- |
-| **Latest version** | v1.6.3 (versionCode 26, hotfix on 2026-11-05) |
-| **Package** | 9.50 MB · installs over the previous version, data preserved |
+| **Latest version** | v1.6.4 (versionCode 27, 2026-11-07) |
+| **Package** | 9.52 MB · installs over the previous version, data preserved |
 | **Requirements** | Android 7.0+ (minSdk 24), targetSdk 34 |
 | **Stack** | Kotlin · Jetpack Compose (Material 3) · Room · Coil · PdfRenderer |
 | **Permissions** | 2 foreground-service + 1 notification + 2 media-read (requested only when needed, never on cold start); no network |
@@ -21,6 +21,13 @@ You can also select a batch of images (`001.jpg`, `002.jpg`, …) and they are s
 ---
 
 ## 1. Features
+
+### Gestures / wallpaper / data safety (v1.6.4)
+
+- **Long-press drag no longer pops the action sheet**: the root cause was `onDragCancel = { onDragEnd(false) }` — a successful move refreshes the list and disposes the dragged tile, which fires *cancel*, and cancel was treated as "didn't move", so the menu opened anyway.
+- **Set as wallpaper**: on the preview screen. Still images go through `WallpaperManager`; GIF / animated WebP / APNG / Ugoira / Lottie are drawn frame-by-frame by a built-in `WallpaperService` at 25fps. SVGA is not supported (its engine needs an `SVGAImageView`) and says so.
+- **Data status**: Settings → Data & backup → Data status, showing gallery size, database size, snapshot count, with a manual snapshot button.
+- **Full backup now includes the gallery**: the exported zip carries `gallery/` plus Ugoira frame folders; older backups still restore.
 
 ### Hotfix: WebP animation detection (v1.6.3 · 2026-11-05)
 
@@ -301,7 +308,7 @@ See [web/README.md](web/README.md).
 
 ### Route A: install the APK (prebuilt, recommended)
 
-**`漫画书架-v1.6.3.apk` (~9.50 MB) sits in this directory**; just install it:
+**`漫画书架-v1.6.4.apk` (~9.52 MB) sits in this directory**; just install it:
 
 1. Allow installing from unknown sources in Android settings (the exact path differs by vendor)
 2. Copy the APK to the phone (USB, WeChat file transfer, QQ, cloud drive — anything works)
@@ -312,10 +319,10 @@ See [web/README.md](web/README.md).
 | Item | Value |
 | --- | --- |
 | Package | `com.mangashelf.reader` |
-| Version | 1.6.3 (versionCode 26) |
+| Version | 1.6.4 (versionCode 27) |
 | Requirements | Android 7.0+ (minSdk 24), targetSdk 34 |
 | Signing | Self-signed key (`keystore/mangashelf.jks`), so later builds upgrade in place |
-| Size | 9,960,206 bytes (9.50 MB) |
+| Size | 9,986,866 bytes (9.52 MB) |
 | Icon | Penguin girl (generated from `企鹅娘-无水印.png`, fixed since v1.2) |
 
 > **Versioning rule**: every release produces a **new file**; old APKs are never overwritten or deleted (the file name carries the version).
