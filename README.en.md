@@ -8,8 +8,8 @@
 
 | | |
 | :-- | :-- |
-| **Latest version** | v1.6.4 (versionCode 27, 2026-11-07) |
-| **Package** | 9.52 MB · installs over the previous version, data preserved |
+| **Latest version** | v1.6.5 (versionCode 28, 2026-11-09) |
+| **Package** | 9.54 MB · installs over the previous version, data preserved |
 | **Requirements** | Android 7.0+ (minSdk 24), targetSdk 34 |
 | **Stack** | Kotlin · Jetpack Compose (Material 3) · Room · Coil · PdfRenderer |
 | **Permissions** | 2 foreground-service + 1 notification + 2 media-read (requested only when needed, never on cold start); no network |
@@ -21,6 +21,14 @@ You can also select a batch of images (`001.jpg`, `002.jpg`, …) and they are s
 ---
 
 ## 1. Features
+
+### Wallpaper pipeline rework (added in v1.6.5)
+
+- **Everything now renders through the built-in wallpaper service.** Only a live wallpaper can control parallax via `onOffsetsChanged`; a static system wallpaper leaves parallax to the launcher, where the app has no say.
+- **Wallpaper editor.** "Set as wallpaper" now opens a crop screen: pinch zoom (1x-5x), pan, horizontal/vertical flip, 90-degree rotation, three fill modes (cover / fit / original), a parallax toggle and a reset button. What you see is what gets applied.
+- **Parallax that actually works.** When enabled, the content is scaled up by 12% x 2 as a safe area, so home-screen swipes move it slightly; when disabled it stays still. Launchers that never report offsets are detected after 3 seconds and fall back to a fixed frame instead of jittering.
+- **Battery saver mode.** Settings -> Wallpaper: static images go through the system static wallpaper (lowest power, no parallax); animated images still use the service, otherwise they would not move.
+- **Sharper animated wallpapers.** Frames are decoded at screen width x (1 + 2 x 12%) instead of the raw source size, which previously cost far too much memory and still looked soft. Ugoira keeps the per-frame delays from `frames.json`.
 
 ### Gestures / wallpaper / data safety (v1.6.4)
 
@@ -308,7 +316,7 @@ See [web/README.md](web/README.md).
 
 ### Route A: install the APK (prebuilt, recommended)
 
-**`漫画书架-v1.6.4.apk` (~9.52 MB) sits in this directory**; just install it:
+**`漫画书架-v1.6.5.apk` (~9.54 MB) sits in this directory**; just install it:
 
 1. Allow installing from unknown sources in Android settings (the exact path differs by vendor)
 2. Copy the APK to the phone (USB, WeChat file transfer, QQ, cloud drive — anything works)
@@ -319,10 +327,10 @@ See [web/README.md](web/README.md).
 | Item | Value |
 | --- | --- |
 | Package | `com.mangashelf.reader` |
-| Version | 1.6.4 (versionCode 27) |
+| Version | 1.6.5 (versionCode 28) |
 | Requirements | Android 7.0+ (minSdk 24), targetSdk 34 |
 | Signing | Self-signed key (`keystore/mangashelf.jks`), so later builds upgrade in place |
-| Size | 9,986,870 bytes (9.52 MB) |
+| Size | 10,000,174 bytes (9.54 MB) |
 | Icon | Penguin girl (generated from `企鹅娘-无水印.png`, fixed since v1.2) |
 
 > **Versioning rule**: every release produces a **new file**; old APKs are never overwritten or deleted (the file name carries the version).

@@ -51,6 +51,7 @@ import com.mangashelf.reader.data.PageSortMode
 import com.mangashelf.reader.data.SearchHistory
 import com.mangashelf.reader.data.AppDatabase
 import com.mangashelf.reader.data.StorageStats
+import com.mangashelf.reader.data.WallpaperTarget
 import com.mangashelf.reader.ui.theme.ThemeMode
 import kotlinx.coroutines.launch
 
@@ -284,6 +285,30 @@ fun SettingsScreen(
             item { SettingsRow("从完整备份恢复", "选择之前导出的 zip") { onImportZip() } }
             // v1.6.4：数据状态（图片工作栏占用、数据库大小、自动快照份数）
             item { SettingsRow("数据状态", "图片工作栏 · 数据库 · 自动快照") { showDataStatus = true } }
+
+            // ---------- 壁纸（v1.6.5）----------
+            item { GroupHeader("壁纸") }
+            item {
+                var powerSave by remember { mutableStateOf(WallpaperTarget.powerSave(context)) }
+                SwitchRow(
+                    title = "省电模式（系统静态壁纸）",
+                    subtitle = "开启后静态图交给系统壁纸，最省电但无视差；动图仍走内置壁纸服务",
+                    checked = powerSave,
+                    onChange = {
+                        powerSave = it
+                        WallpaperTarget.setPowerSave(context, it)
+                    }
+                )
+            }
+            item {
+                val target = remember { WallpaperTarget.current(context) }
+                SettingsRow(
+                    "当前壁纸",
+                    if (target == null) "还没有设置过壁纸"
+                    else "${target.kind.label} · ${if (target.parallax) "视差开" else "视差关"} · " +
+                        "缩放 ${"%.2f".format(target.transform.scale)}×"
+                ) { /* 只读展示 */ }
+            }
 
             // ---------- 存储空间（v1.5.9）----------
             item { GroupHeader("存储空间") }

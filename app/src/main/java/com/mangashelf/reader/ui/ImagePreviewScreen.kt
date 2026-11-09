@@ -83,6 +83,7 @@ fun ImagePreviewScreen(
     val pagerState = rememberPagerState(initialPage = start) { items.size }
     var chrome by remember { mutableStateOf(true) }
     var zoomed by remember { mutableStateOf(false) }
+    var editorOpen by remember { mutableStateOf(false) }
     val appCtx = LocalContext.current.applicationContext
     val scope = rememberCoroutineScope()
     val current = items.getOrNull(pagerState.currentPage) ?: items.first()
@@ -176,20 +177,9 @@ fun ImagePreviewScreen(
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(top = 2.dp)
                     )
-                    // v1.6.4：设为壁纸。静态图直接铺；动图唤起系统动态壁纸选择器。
+                    // v1.6.5：进裁剪编辑页（缩放/翻转/旋转/填充/视差），确认后再真正设置
                     TextButton(
-                        onClick = {
-                            val kind = AnimationKind.fromName(current.kind)
-                            if (WallpaperSetter.isLive(kind)) {
-                                val r = WallpaperSetter.applyLive(appCtx, current.relPath, kind)
-                                Toast.makeText(appCtx, r.message, Toast.LENGTH_LONG).show()
-                            } else {
-                                scope.launch {
-                                    val r = WallpaperSetter.applyStill(appCtx, fileOf(current))
-                                    Toast.makeText(appCtx, r.message, Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        },
+                        onClick = { editorOpen = true },
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 0.dp),
                         modifier = Modifier.padding(top = 2.dp)
                     ) {
@@ -201,6 +191,16 @@ fun ImagePreviewScreen(
                     }
                 }
             }
+        }
+
+        // v1.6.5：壁纸裁剪编辑页（盖在预览之上，关闭后回到预览）
+        if (editorOpen) {
+            WallpaperEditorScreen(
+                file = fileOf(current),
+                item = current,
+                ugoiraFrames = ugoiraFramesOf(current),
+                onClose = { editorOpen = false }
+            )
         }
     }
 }
