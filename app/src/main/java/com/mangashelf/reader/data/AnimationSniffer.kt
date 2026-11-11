@@ -112,8 +112,10 @@ object AnimationSniffer {
         var durationMs = 0
         runCatching {
             RandomAccessFile(file, "r").use { raf ->
-                raf.seek(13) // "GIF89a" + 逻辑屏幕宽高 4 + packed 1 + 背景色 1 + 像素比 1
+                // 逻辑屏幕描述符：签名 6 + 宽 4 → packed 在 offset 10
+                raf.seek(10)
                 val packed = raf.read() and 0xFF
+                raf.skipBytes(2) // 背景色索引 1 + 像素宽高比 1
                 if (packed and 0x80 != 0) {
                     raf.skipBytes(3 * (1 shl ((packed and 0x07) + 1)))
                 }
@@ -127,8 +129,13 @@ object AnimationSniffer {
                         0x21 -> { // 扩展
                             val label = raf.read()
                             if (label == 0xF9) {
-                                raf.read(buf, 0, 4) // blockSize + packed + delay(2)
-                                delayCs = (buf[2].toInt() and 0xFF) or ((buf[3].toInt() and 0xFF) shl 8)
+                                // 图形控制扩展：blockSize(1) + packed(1) + delay(2) + 透明色索引(1) + 终止符(1)
+                                val blockSize = raf.read()
+                                if (blockSize > 0) {
+                                    raf.read(buf, 0, blockSize.coerceAtMost(4))
+                                    if (blockSize > 4) raf.skipBytes(blockSize - 4)
+                                }
+                                delayCs = (buf[1].toInt() and 0xFF) or ((buf[2].toInt() and 0xFF) shl 8)
                                 raf.read() // 终止符 0x00
                             } else {
                                 skipSubBlocks(raf)
@@ -268,15 +275,29 @@ object AnimationSniffer {
         return (((op - ip) / fr) * 1000).toInt().coerceIn(0, 60 * 60 * 1000)
     }
 
+    /**
+     * 从 `"key": 123` 里取出数字。
+     *
+     * 必须在数字结束时**停下**：早先的实现把后续 40 个字符里所有数字都拼进来，
+     * 于是 `"op":60,"w":512` 会被读成 60512，Lottie 时长直接算错。
+     */
     private fun numField(text: String, key: String): Double? {
         val idx = text.indexOf("\"$key\"")
         if (idx < 0) return null
         val colon = text.indexOf(':', idx)
         if (colon < 0) return null
         val sb = StringBuilder()
+        var started = false
         for (i in colon + 1 until minOf(text.length, colon + 40)) {
             val c = text[i]
-            if (c.isDigit() || c == '.' || c == '-' || c == '+' || c == 'e' || c == 'E') sb.append(c)
+            if (c.isDigit() || c == '.' || c == '-' || c == '+' || c == 'e' || c == 'E') {
+                sb.append(c)
+                started = true
+            } else if (started) {
+                break
+            } else if (c != ' ' && c != '\t' && c != '\n' && c != '\r') {
+                break
+            }
         }
         return sb.toString().toDoubleOrNull()
     }
@@ -299,8 +320,35 @@ object AnimationSniffer {
         (b[off].toInt() and 0xFF) or ((b[off + 1].toInt() and 0xFF) shl 8) or
             ((b[off + 2].toInt() and 0xFF) shl 16) or ((b[off + 3].toInt() and 0xFF) shl 24)
 
+    /**
+     * 扩展名 → mime。
+     *
+     * 先查本地表：`MimeTypeMap` 是 Android 框架类，在 JVM 单元测试里是空壳（调用即抛
+     * "Stub!"），把判断挪到本地表后，`sniff` 的核心逻辑才能被纯 JVM 单测覆盖。
+     * 表里没有的扩展名再退回系统实现，失败给 octet-stream。
+     */
     fun mimeFromName(name: String): String {
         val ext = name.substringAfterLast('.', "").lowercase()
-        return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
+        LOCAL_MIME[ext]?.let { return it }
+        return runCatching { MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) }
+            .getOrNull() ?: "application/octet-stream"
     }
+
+    private val LOCAL_MIME = mapOf(
+        "jpg" to "image/jpeg",
+        "jpeg" to "image/jpeg",
+        "png" to "image/png",
+        "apng" to "image/apng",
+        "gif" to "image/gif",
+        "webp" to "image/webp",
+        "bmp" to "image/bmp",
+        "heic" to "image/heic",
+        "heif" to "image/heif",
+        "json" to "application/json",
+        "lottie" to "application/zip",
+        "svga" to "image/svga",
+        "zip" to "application/zip",
+        "cbz" to "application/vnd.comicbook+zip",
+        "pdf" to "application/pdf"
+    )
 }

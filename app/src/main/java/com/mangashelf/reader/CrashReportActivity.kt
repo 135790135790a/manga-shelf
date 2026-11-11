@@ -27,6 +27,30 @@ class CrashReportActivity : Activity() {
     companion object {
         const val EXTRA_TEXT = "crash_text"
         private const val REQUEST_SAVE_ZIP = 7001
+
+        /**
+         * 从完整崩溃日志里抽出发给开发者最有用的部分：
+         * 异常首行 + 本应用栈帧 + Caused by。
+         *
+         * 完整日志动辄几百行，贴进聊天窗口容易被截断，也可能带上用户路径等无关信息。
+         */
+        internal fun compact(text: String): String {
+            if (text.isBlank()) return text
+            val lines = text.lines()
+            val out = StringBuilder()
+            lines.firstOrNull { it.isNotBlank() }?.let { out.appendLine(it.trim()) }
+            val appFrames = lines.filter { it.contains("com.mangashelf") }.take(10)
+            if (appFrames.isNotEmpty()) {
+                out.appendLine("--- app frames ---")
+                appFrames.forEach { out.appendLine(it.trim()) }
+            }
+            val causes = lines.filter { it.trimStart().startsWith("Caused by") }.take(3)
+            if (causes.isNotEmpty()) {
+                out.appendLine("--- caused by ---")
+                causes.forEach { out.appendLine(it.trim()) }
+            }
+            return out.toString().trim()
+        }
     }
 
     private var pendingZip: java.io.File? = null
@@ -50,8 +74,8 @@ class CrashReportActivity : Activity() {
         }
 
         val hint = TextView(this).apply {
-            this.text = "请把下面这段文字截图或复制发给开发者。\n" +
-                "同时也已保存到：Android/data/com.mangashelf.reader/files/crash/"
+            this.text = "点「复制精简」只复制异常与关键堆栈，最方便发给开发者；\n" +
+                "完整日志也已保存到：Android/data/com.mangashelf.reader/files/crash/"
             setTextColor(Color.parseColor("#FF9F45"))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setPadding(0, pad / 2, 0, pad / 2)
@@ -72,6 +96,17 @@ class CrashReportActivity : Activity() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
+        }
+
+        val copyCompactButton = Button(this).apply {
+            text = "复制精简"
+            setOnClickListener {
+                runCatching {
+                    val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    cm.setPrimaryClip(ClipData.newPlainText("crash-compact", compact(reportText)))
+                    this.text = "已复制"
+                }
+            }
         }
 
         val copyButton = Button(this).apply {
@@ -111,6 +146,7 @@ class CrashReportActivity : Activity() {
 
         val buttons = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
+            addView(copyCompactButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             addView(copyButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             addView(exitButton, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
